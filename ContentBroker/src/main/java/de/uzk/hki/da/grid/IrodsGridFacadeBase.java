@@ -29,8 +29,8 @@ import org.slf4j.LoggerFactory;
 
 import de.uzk.hki.da.model.Node;
 import de.uzk.hki.da.model.StoragePolicy;
+import de.uzk.hki.da.utils.C;
 import de.uzk.hki.da.utils.MD5Checksum;
-import de.uzk.hki.da.utils.Utilities;
 
 
 /**
@@ -47,6 +47,7 @@ public abstract class IrodsGridFacadeBase implements GridFacade {
 	
 	/** The local node. */
 	protected Node localNode;
+	
 	
 	
 	/* (non-Javadoc)
@@ -78,15 +79,15 @@ public abstract class IrodsGridFacadeBase implements GridFacade {
 		String address_dest = relative_address_dest;
 		if (!relative_address_dest.startsWith("/")) 
 			address_dest = "/" + relative_address_dest;
-		String targetPhysically = Utilities.slashize(localNode.getGridCacheAreaRootPath()) + address_dest;
-		String targetLogically  = "/" + irodsSystemConnector.getZone() + address_dest;	
+		String targetPhysically = localNode.getGridCacheAreaRootPath() + "/" + C.AIP + address_dest;
+		String targetLogically  = "/" + irodsSystemConnector.getZone() + "/" + C.AIP + address_dest;	
 		
 		File gridfile = new File (targetPhysically); 	
 		
 		if (gridfile.exists()) {
 			
 			if (!replicationIsSolelyOnCache(targetLogically))
-				throw new java.io.IOException("Grid File " +gridfile+" has already LZA Repls, do not try to put it again!");
+				throw new java.io.IOException("Grid File " +gridfile+" "+targetLogically+" has already LZA Repls, do not try to put it again!");
 			
 			if (MD5Checksum.getMD5checksumForLocalFile(file).equals(MD5Checksum.getMD5checksumForLocalFile(gridfile))){
 				// then the only thing left to do is to replicate again
@@ -191,7 +192,7 @@ public abstract class IrodsGridFacadeBase implements GridFacade {
 	@Override
 	public boolean isValid(String address_dest) {
 
-		address_dest = "/" + irodsSystemConnector.getZone() + address_dest;
+		address_dest = "/" + irodsSystemConnector.getZone() + "/" + C.AIP + "/" + address_dest;
 		
 		irodsSystemConnector.connect();
 		
@@ -237,7 +238,7 @@ public abstract class IrodsGridFacadeBase implements GridFacade {
 	@Override
 	public void get(File destination, String gridFileAdress) throws IOException  { 
 		
-		String prefixedGridFileAdress = "/" + irodsSystemConnector.getZone() + gridFileAdress;
+		String prefixedGridFileAdress = "/" + irodsSystemConnector.getZone()+ "/" + C.AIP + "/" + gridFileAdress;
 		
 		irodsSystemConnector.connect();
 		
@@ -268,7 +269,7 @@ public abstract class IrodsGridFacadeBase implements GridFacade {
 	public long getFileSize(String address_dest) throws IOException {
 		irodsSystemConnector.connect();
 		
-		long filesize = irodsSystemConnector.getFileSize(address_dest);
+		long filesize = irodsSystemConnector.getFileSize("/" + irodsSystemConnector.getZone()+ "/" + C.AIP + "/" + address_dest);
 		
 		irodsSystemConnector.logoff();
 		return filesize;

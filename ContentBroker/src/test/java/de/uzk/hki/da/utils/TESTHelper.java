@@ -37,10 +37,24 @@ public class TESTHelper {
 	 * @param workAreaRootPath the base path
 	 * @return the object
 	 */
-	public static Object setUpObject(String identifier,String workAreaRootPath){
+	public static Object setUpObject(String identifier,Path workAreaRootPath){
 		
-		Node node = new Node();
+		return setUpObject(identifier,workAreaRootPath,workAreaRootPath);
+	}
+	
+	/**
+	 * Sets up the object.
+	 *
+	 * @param pkgId the pkg id
+	 * @param workAreaRootPath the base path
+	 * @return the object
+	 */
+	public static Object setUpObject(String identifier,Path workAreaRootPath,Path ingestAreaRootPath){
+		
+		Node node = new Node(); 
+		node.setName("testnode");
 		node.setWorkAreaRootPath(workAreaRootPath);
+		node.setIngestAreaRootPath(ingestAreaRootPath);
 		
 		Contractor contractor = new Contractor();
 		contractor.setShort_name("TEST");
@@ -48,6 +62,7 @@ public class TESTHelper {
 		Package pkg = new Package();
 		pkg.setName("1");
 		pkg.setId(1);
+		pkg.setContainerName("testcontainer.tgz");
 		
 		Object o = new Object();
 		o.setContractor(contractor);

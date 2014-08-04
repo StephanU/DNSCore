@@ -20,8 +20,7 @@
 package de.uzk.hki.da.model;
 import javax.persistence.*;
 
-import de.uzk.hki.da.utils.Utilities;
-
+import de.uzk.hki.da.utils.Path;
 import java.lang.Object;
 
 
@@ -46,20 +45,17 @@ public class Node{
 	/** The repl_destinations. */
 	@Transient private String repl_destinations;
 	
-	/** The dip area root path. */
-	@Transient private String dipAreaRootPath;
-	
 	/** The work area root path. */
-	@Transient private String workAreaRootPath;
+	@Transient private Path workArea;
 	
 	/** The user area root path. */
-	@Transient private String userAreaRootPath;
+	@Transient private Path userAreaRoot;
 	
 	/** The ingest area root path. */
-	@Transient private String ingestAreaRootPath;
+	@Transient private Path ingestAreaRoot;
 	
 	/** The grid cache area root path. */
-	@Transient private String gridCacheAreaRootPath;
+	@Transient private Path gridCacheArea;
 	
 	/** The admin email. */
 	@Transient private String adminEmail;
@@ -208,8 +204,7 @@ public class Node{
 	 */
 	@Override 
 	public int hashCode(){
-		
-		return 31+name.hashCode();
+		return id; // Hacked with full consciousness.
 	}
 
 	/**
@@ -254,8 +249,8 @@ public class Node{
 	 *
 	 * @return the work area root path
 	 */
-	public String getWorkAreaRootPath() {
-		return workAreaRootPath;
+	public Path getWorkAreaRootPath() {
+		return workArea;
 	}
 
 
@@ -264,27 +259,8 @@ public class Node{
 	 *
 	 * @param workAreaRootPath the new work area root path
 	 */
-	public void setWorkAreaRootPath(String workAreaRootPath) {
-		this.workAreaRootPath = Utilities.slashize(workAreaRootPath);
-	}
-
-	/**
-	 * Gets the dip area root path.
-	 *
-	 * @return the dip area root path
-	 */
-	public String getDipAreaRootPath() {
-		return dipAreaRootPath;
-	}
-
-
-	/**
-	 * Sets the dip area root path.
-	 *
-	 * @param dipAreaRootPath the new dip area root path
-	 */
-	public void setDipAreaRootPath(String dipAreaRootPath) {
-		this.dipAreaRootPath = Utilities.slashize(dipAreaRootPath);
+	public void setWorkAreaRootPath(Path workAreaRootPath) {
+		this.workArea = workAreaRootPath;
 	}
 
 
@@ -293,18 +269,18 @@ public class Node{
 	 *
 	 * @return the user area root path
 	 */
-	public String getUserAreaRootPath() {
-		return userAreaRootPath;
+	public Path getUserAreaRootPath() {
+		return userAreaRoot;
 	}
 
 
 	/**
 	 * Sets the user area root path.
 	 *
-	 * @param transferAreaRootPath the new user area root path
+	 * @param transferAreaRoot the new user area root path
 	 */
-	public void setUserAreaRootPath(String transferAreaRootPath) {
-		this.userAreaRootPath = Utilities.slashize(transferAreaRootPath);
+	public void setUserAreaRootPath(Path transferAreaRoot) {
+		this.userAreaRoot = transferAreaRoot;
 	}
 
 
@@ -313,18 +289,18 @@ public class Node{
 	 *
 	 * @return the ingest area root path
 	 */
-	public String getIngestAreaRootPath() {
-		return ingestAreaRootPath;
+	public Path getIngestAreaRootPath() {
+		return ingestAreaRoot;
 	}
 
 
 	/**
 	 * Sets the ingest area root path.
 	 *
-	 * @param ingestAreaRootPath the new ingest area root path
+	 * @param ingestAreaRoot the new ingest area root path
 	 */
-	public void setIngestAreaRootPath(String ingestAreaRootPath) {
-		this.ingestAreaRootPath = Utilities.slashize(ingestAreaRootPath);
+	public void setIngestAreaRootPath(Path ingestAreaRoot) {
+		this.ingestAreaRoot = ingestAreaRoot;
 	}
 	
 	/**
@@ -351,8 +327,8 @@ public class Node{
 	 *
 	 * @param gridCacheAreaRootPath the gridCacheAreaRootPath to set
 	 */
-	public void setGridCacheAreaRootPath(String gridCacheAreaRootPath) {
-		this.gridCacheAreaRootPath = Utilities.slashize(gridCacheAreaRootPath);
+	public void setGridCacheAreaRootPath(Path gridCacheAreaRootPath) {
+		this.gridCacheArea = gridCacheAreaRootPath;
 	}
 
 
@@ -361,8 +337,8 @@ public class Node{
 	 *
 	 * @return the gridCacheAreaRootPath
 	 */
-	public String getGridCacheAreaRootPath() {
-		return gridCacheAreaRootPath;
+	public Path getGridCacheAreaRootPath() {
+		return gridCacheArea;
 	}
 
 

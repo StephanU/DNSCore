@@ -2,7 +2,7 @@ package daweb3
 /*
  DA-NRW Software Suite | ContentBroker
  Copyright (C) 2013 Historisch-Kulturwissenschaftliche Informationsverarbeitung
- Universität zu Köln
+ Universität zu Köln, 2014 LVR InfoKom
 
  This program is free software: you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@ package daweb3
  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 /**
- * The Main DA-NRW object Controller for listing Objects (AIP) stored in the DA-NRW 
+ * The Main DA-NRW object Controller for listing Objects (AIP) stored in DNS 
  * @Author Jens Peters, Sebastian Cuy
  * 
  */
@@ -26,28 +26,47 @@ package daweb3
 
 import org.springframework.dao.DataIntegrityViolationException
 import grails.converters.*
+import java.security.InvalidParameterException
+
 
 class ObjectController {
 
     static allowedMethods = [save: "POST", update: "POST", delete: "POST"]
-
+	static QueueUtils qu = new QueueUtils();
+	
+	
     def index() {
         redirect(action: "list", params: params)
     }
 
     def list() {
+		
 				def admin = false;
+				
+				def contractorList = Contractor.list()
+		
 				def relativeDir = session.contractor.shortName+ "/outgoing"
 				def baseFolder = grailsApplication.config.localNode.userAreaRootPath + "/" + relativeDir				
 					params.max = Math.min(params.max ? params.int('max') : 10, 100)
-					
+
+					if (params.searchContractorName){
+						if(params.searchContractorName=="null"){
+							params.remove("searchContractorName")
+						}
+					}
+
 					def c = Object.createCriteria()
 					log.debug(params.toString())
 					def objects = c.list(max: params.max, offset: params.offset ?: 0) {
+						
+						if (session==null) throw new RuntimeException("sss")
 						if (params.search) params.search.each { key, value ->
-							like(key, "%" + value + "%")
+								like(key, "%" + value + "%")
 						}
+						
+						
 						if (session.contractor.admin==0) {
+						
 							def contractor = Contractor.findByShortName(session.contractor.shortName)
 							eq("contractor.id", contractor.id)
 							
@@ -63,13 +82,22 @@ class ObjectController {
 						order(params.sort ?: "id", params.order ?: "desc")
 					}
 					log.debug(params.search)
+
+					// workaround: make ALL params accessible for following http-requests
+					def paramsList = params.search?.collectEntries { key, value -> ['search.'+key, value] }
+					if(params.searchContractorName){
+						paramsList.putAt("searchContractorName", params?.searchContractorName)
+					}
+
 					return [
 						objectInstanceList: objects,
 						objectInstanceTotal: objects.getTotalCount(),
 						searchParams: params.search,
+						paramsList: paramsList,
 						paginate: true,
 						admin: admin,
-						baseFolder: baseFolder
+						baseFolder: baseFolder,
+						contractorList: contractorList
 				]
     }
 
@@ -125,7 +153,7 @@ class ObjectController {
 					result.success = false
 				} else {
 					try {
-					createQueueEntryForObject( object ,"900", null) + "\n"	
+					qu.createJob( object ,"900", grailsApplication.config.irods.server) + "\n"	
 					result.msg += "${object.urn} - OK. " 
 					} catch ( Exception e ) { 
 					result.msg += "${object.urn} - FEHLER. "
@@ -157,7 +185,7 @@ class ObjectController {
 					
 				} else {
 					try {
-					createQueueEntryForObject( object ,"900", null) 
+					qu.createJob( object ,"900", grailsApplication.config.irods.server) 
 					result.msg = "Objekt ${object.urn} erfolgreich angefordert."
 					result.success = true
 					} catch ( Exception e ) { 
@@ -181,7 +209,7 @@ class ObjectController {
 		if ( object == null ) result.msg += "Das Objekt ${object.urn} konnte nicht gefunden werden!"
 		else {
 			try {
-				createQueueEntryForObject( object, "700", null )
+				qu.createJob( object, "700", grailsApplication.config.cb.presServer )
 				result.msg = "Auftrag zur Erstellung neuer Präsentationsformate erstellt ${object.urn}."
 				result.success = true
 			} catch ( Exception e ) {
@@ -204,7 +232,7 @@ class ObjectController {
 		if ( object == null ) result.msg += "Das Objekt ${object.urn} konnte nicht gefunden werden!"
 		else {
 			try {
-				createQueueEntryForObject( object, "560" ,grailsApplication.config.cb.presServer)
+				qu.createJob( object, "560" ,grailsApplication.config.cb.presServer)
 				result.msg = "Auftrag zur Indizierung erstellt ${object.urn}."
 				result.success = true
 			} catch ( Exception e ) {
@@ -216,37 +244,6 @@ class ObjectController {
 	}
 
 		
-	
-		/**
-		 * @param object valid instance of an object
-		 * throws Exception if entry could not be created
-		 */
-		String createQueueEntryForObject(object, status, optionalInitialNode) {
-			if (object == null) throw new RuntimeException ( "Object is not valid" )
-
-			log.debug "object.contractor.shortName: " + object.contractor.shortName
-			log.debug "session.contractor.shortName: " + session.contractor.shortName
-			
-			def list = QueueEntry.findByObjAndStatus(object, status) 
-			if (list==null) {
-			def entry = new QueueEntry()		
-			entry.status = status
-			entry.setObj(object);
-			entry.created = Math.round(new Date().getTime()/1000L)
-			entry.modified = Math.round(new Date().getTime()/1000L)
-			if (optionalInitialNode==null)
-			entry.setInitialNode(grailsApplication.config.irods.server)
-			else entry.setInitialNode(optionalInitialNode)
-			def errorMsg = ""
-			if( !entry.save() ) {
-				entry.errors.each { errorMsg += it }
-				throw new Exception(errorMsg)
-			} 
-			} else throw new RuntimeException ("Bereits angefordert.");			
-		}
-
-
-
 	
 	def queueForInspect = {
 		
@@ -261,8 +258,7 @@ class ObjectController {
 				log.debug "session.contractor.shortName: " + session.contractor.shortName
 					
 				try {
-						createQueueEntryForObject( object, "5000" , grailsApplication.config.irods.server)
-						result.msg = "Auftrag zur Überprüfung erstellt ${object.urn}."
+						qu.createJob( object, "5000" , grailsApplication.config.irods.server)
 						result.msg = "Das Objekt mit der URN ${object.urn} wurde zur Überprüfung in die Queue eingestellt!"
 						result.success = true
 					} catch(Exception e) {
@@ -274,4 +270,10 @@ class ObjectController {
 			render result as JSON
 	}
 
+	def collectSearchParams = {
+		def paramList = params.search?.collectEntries { key, value -> ['search.'+key, value] }
+		paramsList.putAt("searchContractorName", params?.searchContractorName)
+		return
+		[paramsList:paramsList]
+	}
 }

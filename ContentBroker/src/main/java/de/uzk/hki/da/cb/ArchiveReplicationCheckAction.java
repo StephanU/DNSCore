@@ -19,7 +19,6 @@
 
 package de.uzk.hki.da.cb;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.Date;
 
@@ -27,16 +26,12 @@ import javax.mail.MessagingException;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang.NotImplementedException;
-import org.hibernate.classic.Session;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import de.uzk.hki.da.core.ConfigurationException;
-import de.uzk.hki.da.core.HibernateUtil;
 import de.uzk.hki.da.grid.GridFacade;
 import de.uzk.hki.da.model.Job;
-import de.uzk.hki.da.model.Node;
 import de.uzk.hki.da.model.Object;
+import de.uzk.hki.da.model.Package;
 import de.uzk.hki.da.model.StoragePolicy;
 import de.uzk.hki.da.service.Mail;
 
@@ -52,16 +47,13 @@ import de.uzk.hki.da.service.Mail;
  */
 public class ArchiveReplicationCheckAction extends AbstractAction{
 
-	static final Logger logger = LoggerFactory.getLogger(ArchiveReplicationCheckAction.class);
-	
 	private int minNodes = 3;
 	private int timeOut = 4000;
 	
-	private Node dipNode;
+	private String presentationRepositoryNodeName;
 	
 	private GridFacade gridRoot;
-	
-	
+
 	/**
 	 * @throws IOException 
 	 */
@@ -77,16 +69,15 @@ public class ArchiveReplicationCheckAction extends AbstractAction{
 			delay();
 		}
 		while (!gridRoot.storagePolicyAchieved(
-				"/aip/" + object.getContractor().getShort_name() + 
+				object.getContractor().getShort_name() + 
 				"/" + object.getIdentifier() + "/"+ object.getIdentifier() + ".pack_" + object.getLatestPackage().getName() + ".tar", 
 				sp));
 		
-		setObjectStored(object);
+		prepareObjectForObjectDBStorage(object);
 		sendReciept(job, object);
-		object.getPackages().get(object.getPackages().size()-1).getFiles().clear();
-		object.getPackages().get(object.getPackages().size()-1).getEvents().clear();
-		createPublicationJob();
-		FileUtils.deleteDirectory(new File(object.getPath()));
+		
+		toCreate = createPublicationJob(job);
+		FileUtils.deleteDirectory(object.getPath().toFile());
 		return true;
 	}
 	
@@ -101,33 +92,34 @@ public class ArchiveReplicationCheckAction extends AbstractAction{
 	
 
 	/**
-	 * @author Daniel M. de Oliveira Jens Peters
+	 * @author Daniel M. de Oliveira 
+	 * @author Jens Peters
 	 */
-	private void createPublicationJob(){
+	private Job createPublicationJob(Job parent){
 		
-		logger.info("Creating child job with state 540 on "+   getDipNode().getName()+" for possible publication of this object.");
-		Job child = new Job (job, "540");
-		child.setInitial_node(getDipNode().getName());
-		child.setObject(getObject());
-		child.setDate_created(String.valueOf(new Date().getTime()/1000L));
+		Job result = new Job();
 		
-		Session session = HibernateUtil.openSession();
-		session.beginTransaction();
-		session.save(child);
-		session.getTransaction().commit();
-		session.close();
+		logger.info("Creating child job with state 540 on "+ 
+				getPresentationRepositoryNodeName()+" for possible publication of this object.");
+		result = new Job (parent, "540");
+		result.setResponsibleNodeName(getPresentationRepositoryNodeName());
+		result.setObject(getObject());
+		result.setDate_created(String.valueOf(new Date().getTime()/1000L));
+		
+		return result;
 	}
 	
-	
-	
-	
-	public Node getDipNode() {
-		return dipNode;
+	/**
+	 * @author Daniel M. de Oliveira
+	 * @return
+	 */
+	public String getPresentationRepositoryNodeName() {
+		return presentationRepositoryNodeName;
 	}
 
 
-	public void setDipNode(Node dipNode) {
-		this.dipNode = dipNode;
+	public void setPresentationRepositoryNodeName(String presentationRepositoryNodeName) {
+		this.presentationRepositoryNodeName = presentationRepositoryNodeName;
 	}
 	
 	/**
@@ -156,23 +148,24 @@ public class ArchiveReplicationCheckAction extends AbstractAction{
 	}
 	
 	/** 
+	 * Cleans object db entry from data which should not get persisted and
+	 * adds data which should get persisted. 
+	 * Sets archive state of object to 100 (archived according to storage policy).
+	 * 
 	 * @author Jens Peters
-	 * Stores Object DB entry in the database. The entry is deduced from the queue entry which
-	 * is not persistent. The method checks if the Object DB entry already exists, and
-	 * adds new Package if that's the case. 
+	 * @author Daniel M. de Oliveira
 	 */
-	private void setObjectStored(Object obj) {
+	private void prepareObjectForObjectDBStorage(Object obj) {
 
-		// THE OBJECT Is set to the full archived valid state now!
-		// since it has sucessfully been been created before. 
-		// The Object is stored in archived and replicated state 100!
-		obj.setObject_state(100);
+		for (Package pkg : obj.getPackages()){
+			pkg.getEvents().clear();
+			pkg.getFiles().clear();
+		}
 		
+		obj.setObject_state(100);
 		obj.setDate_modified(String.valueOf(new Date().getTime()));
-		obj.setStatic_nondisclosure_limit((Date) actionCommunicatorService.extractDataObject(job.getId(), 
-											"static_nondisclosure_limit"));
-		obj.setDynamic_nondisclosure_limit((String) actionCommunicatorService.extractDataObject(job.getId(),
-											"dynamic_nondisclosure_limit"));
+		obj.setStatic_nondisclosure_limit(job.getStatic_nondisclosure_limit());
+		obj.setDynamic_nondisclosure_limit(job.getDynamic_nondisclosure_limit());
 	}
 	
 	
@@ -187,7 +180,7 @@ public class ArchiveReplicationCheckAction extends AbstractAction{
 		String email = obj.getContractor().getEmail_contact();
 		String subject;
 		String msg;
-		if (obj.hasDeltas())
+		if (obj.isDelta())
 		{
 			subject = "[DA-NRW] Einlieferungsbeleg für Ihr Delta zum Objekt " + objectIdentifier;
 			msg = "Ihrem archivierten Objekt mit dem Identifier " + objectIdentifier + " und der URN " + obj.getUrn() +
@@ -207,7 +200,7 @@ public class ArchiveReplicationCheckAction extends AbstractAction{
 		
 		if (email!=null) {
 		try {
-			Mail.sendAMail(email, subject, msg);
+			Mail.sendAMail(getSystemFromEmailAdress(), email, subject, msg);
 		} catch (MessagingException e) {
 			logger.error("Sending email reciept for " + objectIdentifier + " failed",e);
 			return false;
@@ -231,5 +224,6 @@ public class ArchiveReplicationCheckAction extends AbstractAction{
 	public void setGridRoot(GridFacade gridRoot) {
 		this.gridRoot = gridRoot;
 	}
+
 }
 	

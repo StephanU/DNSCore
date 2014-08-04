@@ -20,9 +20,11 @@
 package de.uzk.hki.da.utils;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.Reader;
 import java.text.Format;
 import java.text.SimpleDateFormat;
@@ -47,6 +49,21 @@ public class Utilities {
 	/** The logger. */
 	public static Logger logger = LoggerFactory.getLogger(Utilities.class);
 
+	/**
+	 * @param propertiesFile
+	 * @return properties
+	 * @throws IOException
+	 * @throws FileNotFoundException if propertiesfile does not exist
+	 * @author Daniel M. de Oliveira
+	 */
+	public static Properties read(File propertiesFile) throws IOException{
+		if (!propertiesFile.exists()) throw new FileNotFoundException(propertiesFile+" does not exist");
+		InputStream in = new FileInputStream(propertiesFile);
+		Properties props = new Properties();
+		props.load(in);
+		return props;
+	}
+	
 	/**
 	 * Slashize.
 	 *

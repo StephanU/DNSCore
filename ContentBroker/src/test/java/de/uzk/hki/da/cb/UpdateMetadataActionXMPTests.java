@@ -21,6 +21,9 @@
 package de.uzk.hki.da.cb;
 
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Matchers.anyObject;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.io.File;
 import java.io.IOException;
@@ -31,14 +34,16 @@ import org.apache.commons.io.FileUtils;
 import org.jdom.JDOMException;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
-import de.uzk.hki.da.core.ActionCommunicatorService;
 import de.uzk.hki.da.model.DAFile;
 import de.uzk.hki.da.model.Event;
 import de.uzk.hki.da.model.Job;
 import de.uzk.hki.da.model.Object;
-import de.uzk.hki.da.service.UpdateMetadataService;
+import de.uzk.hki.da.service.MimeTypeDetectionService;
+import de.uzk.hki.da.utils.Path;
+import de.uzk.hki.da.utils.RelativePath;
 import de.uzk.hki.da.utils.TESTHelper;
 
 /**
@@ -46,7 +51,14 @@ import de.uzk.hki.da.utils.TESTHelper;
  */
 public class UpdateMetadataActionXMPTests {
 
-	private final String workAreaRootPath = "src/test/resources/cb/UpdateMetadataActionXMPTests/";
+	private static MimeTypeDetectionService mtds;
+	private final Path workAreaRootPath = new RelativePath("src/test/resources/cb/UpdateMetadataActionXMPTests/");
+	
+	@BeforeClass
+	public static void mockDca() throws IOException {
+		mtds = mock(MimeTypeDetectionService.class);
+		when(mtds.detectMimeType((DAFile)anyObject())).thenReturn("image/tiff");
+	}
 	
 	@Before
 	public void setUp() throws Exception {
@@ -55,18 +67,18 @@ public class UpdateMetadataActionXMPTests {
 
 	@After
 	public void tearDown() throws Exception {
-		new File(workAreaRootPath+"TEST/123/data/dip/public/hasha.xmp").delete();
-		new File(workAreaRootPath+"TEST/123/data/dip/institution/hasha.xmp").delete();
-		new File(workAreaRootPath+"TEST/123/data/dip/public/hashb.xmp").delete();
-		new File(workAreaRootPath+"TEST/123/data/dip/institution/hashb.xmp").delete();
-		new File(workAreaRootPath+"TEST/123/data/dip/public/XMP.rdf").delete();
-		new File(workAreaRootPath+"TEST/123/data/dip/institution/XMP.rdf").delete();
-		new File(workAreaRootPath+"TEST/123/data/dip/public/DC.xml").delete();
-		new File(workAreaRootPath+"TEST/123/data/dip/institution/DC.xml").delete();
-		new File(workAreaRootPath+"TEST/123/data/dip/public/a.xmp").delete();
-		new File(workAreaRootPath+"TEST/123/data/dip/institution/a.xmp").delete();
-		new File(workAreaRootPath+"TEST/123/data/dip/public/b.xmp").delete();
-		new File(workAreaRootPath+"TEST/123/data/dip/institution/b.xmp").delete();
+		Path.make(workAreaRootPath,"work/TEST/123/data/dip/public/hasha.xmp").toFile().delete();
+		Path.make(workAreaRootPath,"work/TEST/123/data/dip/institution/hasha.xmp").toFile().delete();
+		Path.make(workAreaRootPath,"work/TEST/123/data/dip/public/hashb.xmp").toFile().delete();
+		Path.make(workAreaRootPath,"work/TEST/123/data/dip/institution/hashb.xmp").toFile().delete();
+		Path.make(workAreaRootPath,"work/TEST/123/data/dip/public/XMP.rdf").toFile().delete();
+		Path.make(workAreaRootPath,"work/TEST/123/data/dip/institution/XMP.rdf").toFile().delete();
+		Path.make(workAreaRootPath,"work/TEST/123/data/dip/public/DC.xml").toFile().delete();
+		Path.make(workAreaRootPath,"work/TEST/123/data/dip/institution/DC.xml").toFile().delete();
+		Path.make(workAreaRootPath,"work/TEST/123/data/dip/public/a.xmp").toFile().delete();
+		Path.make(workAreaRootPath,"work/TEST/123/data/dip/institution/a.xmp").toFile().delete();
+		Path.make(workAreaRootPath,"work/TEST/123/data/dip/public/b.xmp").toFile().delete();
+		Path.make(workAreaRootPath,"work/TEST/123/data/dip/institution/b.xmp").toFile().delete();
 		FileUtils.deleteDirectory(new File("conf/xslt"));
 	}
 
@@ -133,27 +145,24 @@ public class UpdateMetadataActionXMPTests {
 		obj.getLatestPackage().getEvents().add(evt6);
 		
 		// set up object - end
+		UpdateMetadataAction action = new UpdateMetadataAction();
 		
-		UpdateMetadataService service = new UpdateMetadataService();
 		HashMap<String,String> xpaths = new HashMap<String,String>();
 		xpaths.put("XMP", "//rdf:Description/@rdf:about");
-		service.setXpathsToUrls(xpaths);
+		action.setXpathsToUrls(xpaths);
 		
 		HashMap<String, String> nsMap = new HashMap<String,String>();
-		service.setNamespaces(nsMap);
-		
-		UpdateMetadataAction action = new UpdateMetadataAction();
-		action.setUpdateMetadataService(service);
+		action.setNamespaces(nsMap);
 		
 		Job job = new Job(); job.setId(1);
 		
+		action.setMtds(mtds);
 		action.setObject(obj);
 		action.setJob(job);
 		action.setRepNames(new String[]{"dip/public", "dip/institution"});
 		
-		action.setActionCommunicatorService(new ActionCommunicatorService());
-		action.getActionCommunicatorService().addDataObject(1, "package_type", "XMP");
-		action.getActionCommunicatorService().addDataObject(1, "metadata_file", "XMP.rdf");
+		obj.setMetadata_file("XMP.rdf");
+		obj.setPackage_type("XMP");
 		
 		Map<String, String> dcMappings = new HashMap<String,String>();
 		dcMappings.put("XMP", "conf/xslt/dc/xmp_to_dc.xsl");
@@ -161,13 +170,13 @@ public class UpdateMetadataActionXMPTests {
 		
 		action.implementation();
 		
-		assertTrue(new File(workAreaRootPath+"TEST/123/data/dip/public/hasha.xmp").exists());
-		assertTrue(new File(workAreaRootPath+"TEST/123/data/dip/institution/hasha.xmp").exists());
-		assertTrue(new File(workAreaRootPath+"TEST/123/data/dip/public/hashb.xmp").exists());
-		assertTrue(new File(workAreaRootPath+"TEST/123/data/dip/institution/hashb.xmp").exists());
-		assertTrue(new File(workAreaRootPath+"TEST/123/data/dip/public/XMP.rdf").exists());
-		assertTrue(new File(workAreaRootPath+"TEST/123/data/dip/institution/XMP.rdf").exists());
-		assertTrue(new File(workAreaRootPath+"TEST/123/data/dip/public/DC.xml").exists());
-		assertTrue(new File(workAreaRootPath+"TEST/123/data/dip/institution/DC.xml").exists());
+		assertTrue(new File(workAreaRootPath+"/work/TEST/123/data/dip/public/hasha.xmp").exists());
+		assertTrue(new File(workAreaRootPath+"/work/TEST/123/data/dip/institution/hasha.xmp").exists());
+		assertTrue(new File(workAreaRootPath+"/work/TEST/123/data/dip/public/hashb.xmp").exists());
+		assertTrue(new File(workAreaRootPath+"/work/TEST/123/data/dip/institution/hashb.xmp").exists());
+		assertTrue(new File(workAreaRootPath+"/work/TEST/123/data/dip/public/XMP.rdf").exists());
+		assertTrue(new File(workAreaRootPath+"/work/TEST/123/data/dip/institution/XMP.rdf").exists());
+		assertTrue(new File(workAreaRootPath+"/work/TEST/123/data/dip/public/DC.xml").exists());
+		assertTrue(new File(workAreaRootPath+"/work/TEST/123/data/dip/institution/DC.xml").exists());
 	}
 }

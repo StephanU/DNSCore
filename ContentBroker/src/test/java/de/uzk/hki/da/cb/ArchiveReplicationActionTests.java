@@ -24,6 +24,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 import de.uzk.hki.da.grid.GridFacade;
@@ -31,14 +32,24 @@ import de.uzk.hki.da.model.Contractor;
 import de.uzk.hki.da.model.Node;
 import de.uzk.hki.da.model.Object;
 import de.uzk.hki.da.model.Package;
+import de.uzk.hki.da.utils.Path;
 
 /**
  * @author Daniel M. de Oliveira
  */
 public class ArchiveReplicationActionTests {
 	
-	private Object object;
+	private static String workAreaRootPath;
+	private static Node node = new Node();
 
+	Object object = new Object();
+	
+	@BeforeClass
+	public static void prepareNode() {
+		workAreaRootPath = "src/test/resources/cb/ArchiveReplicationTests/fork/";
+		node.setWorkAreaRootPath(Path.make(workAreaRootPath));
+	}
+	
 	@Before
 	public void setUp(){
 		setUpObject();
@@ -46,45 +57,39 @@ public class ArchiveReplicationActionTests {
 	
 	@Test
 	public void testHappyPath() throws FileNotFoundException, IOException{
-		Node node = new Node();
 		node.setReplDestinations("");
 		Contractor c = new Contractor();
 		c.setShort_name("TEST");
 		c.setForbidden_nodes("");
 		object.setContractor(c);
 		
-		AbstractAction action = setUpAction(node);
+		ArchiveReplicationAction action = setUpAction(node);
 		action.implementation();
 	}
 	
 	@Test
 	public void testReplDestsNotSet() throws FileNotFoundException, IOException{
-		Node node = new Node();
 		node.setReplDestinations(null);
 		Contractor c = new Contractor();
 		c.setShort_name("TEST");
 		c.setForbidden_nodes("");
 		object.setContractor(c);
-		
-		AbstractAction action = setUpAction(node);
+		ArchiveReplicationAction action = setUpAction(node);
 		action.implementation();
 	}
 	
 	@Test
 	public void testForbiddenNodesNotSet() throws FileNotFoundException, IOException{
-		Node node = new Node();
 		node.setReplDestinations("");
 		Contractor c = new Contractor();
 		c.setShort_name("TEST");
 		c.setForbidden_nodes(null);
 		object.setContractor(c);
-		
-		AbstractAction action = setUpAction(node);
+		ArchiveReplicationAction action = setUpAction(node);
 		action.implementation();
 	}
 	
 	private void setUpObject(){
-		object = new Object();
 		object.setIdentifier("identifier");
 		Package pkg = new Package();
 		pkg.setName("1");
@@ -92,12 +97,12 @@ public class ArchiveReplicationActionTests {
 		pkg.setTransientBackRefToObject(object);
 	}
 	
-	private AbstractAction setUpAction(Node node){
-		GridFacade grid = mock (GridFacade.class);
+	private ArchiveReplicationAction setUpAction(Node node){
 		ArchiveReplicationAction action = new ArchiveReplicationAction();
+		GridFacade grid = mock (GridFacade.class);
 		action.setGridRoot(grid);
 		action.setObject(object);
-		action.setNode(node);
+		action.setLocalNode(node);
 		return action;
 	}
 }

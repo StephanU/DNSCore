@@ -22,6 +22,7 @@ package de.uzk.hki.da.grid;
 import java.io.File;
 
 import de.uzk.hki.da.core.ConfigurationException;
+import de.uzk.hki.da.utils.Path;
 
 /**
  * 
@@ -31,13 +32,13 @@ import de.uzk.hki.da.core.ConfigurationException;
 public class IrodsDistributedConversionAdapter implements DistributedConversionAdapter {
 
 	private IrodsSystemConnector irodsSystemConnector;
-	private String zonePath;
+	private Path zone;
 	private String workingResource;
 	
 	@Override
 	public void register(String relativePath, String physicalPath) {
 		if (irodsSystemConnector==null) throw new ConfigurationException("irodsSystemConnector not set");
-		if (zonePath==null||zonePath.isEmpty()) throw new ConfigurationException("zonePath not set");
+		if (zone==null||zone.toString().isEmpty()) throw new ConfigurationException("zonePath not set");
 		if (getWorkingResource()==null||getWorkingResource().isEmpty()) throw new ConfigurationException("working resource not set");
 		
 		if (!irodsSystemConnector.connect()){
@@ -47,7 +48,7 @@ public class IrodsDistributedConversionAdapter implements DistributedConversionA
 		try {
 			
 			irodsSystemConnector.registerFilesInCollection(
-					zonePath+relativePath,
+					Path.make(zone,relativePath).toString(),
 					new File(physicalPath),
 					workingResource
 					);
@@ -68,7 +69,7 @@ public class IrodsDistributedConversionAdapter implements DistributedConversionA
 		try {
 			
 			irodsSystemConnector.replicateCollectionToResource(
-					zonePath+relativePath,
+					Path.make(zone,relativePath).toString(),
 					workingResource
 					);
 			
@@ -82,7 +83,7 @@ public class IrodsDistributedConversionAdapter implements DistributedConversionA
 	@Override
 	public void remove(String relativePath) {
 		if (irodsSystemConnector==null) throw new ConfigurationException("irodsSystemConnector not set");
-		if (zonePath==null||zonePath.isEmpty()) throw new ConfigurationException("zonePath not set");
+		if (zone==null||zone.toString().isEmpty()) throw new ConfigurationException("zonePath not set");
 		if (getWorkingResource()==null||getWorkingResource().isEmpty()) throw new ConfigurationException("working resource not set");
 		
 		
@@ -91,7 +92,7 @@ public class IrodsDistributedConversionAdapter implements DistributedConversionA
 		}
 		
 		try	{
-			irodsSystemConnector.removeCollectionAndEatException(zonePath+relativePath);
+			irodsSystemConnector.removeCollectionAndEatException(Path.make(zone,relativePath).toString());
 		} 
 		finally {
 			irodsSystemConnector.logoff();
@@ -105,20 +106,21 @@ public class IrodsDistributedConversionAdapter implements DistributedConversionA
 	@Override
 	public void create(String relativePath) {
 		
-		
 		if (!irodsSystemConnector.connect()){
 			throw new RuntimeException("Couldn't establish iRODS-Connection");
 		}
 		
 		try	{
 			getIrodsSystemConnector().createCollection(
-					zonePath+relativePath);
+					Path.make(zone,relativePath).toString());
 		} 
 		finally {
 			irodsSystemConnector.logoff();
 		}
-		
 	}
+	
+	
+	
 
 	public IrodsSystemConnector getIrodsSystemConnector() {
 		return irodsSystemConnector;
@@ -129,11 +131,11 @@ public class IrodsDistributedConversionAdapter implements DistributedConversionA
 	}
 
 	public String getZonePath() {
-		return zonePath;
+		return zone.toString();
 	}
 
 	public void setZonePath(String zonePath) {
-		this.zonePath = "/"+zonePath+"/";
+		this.zone = Path.make(zonePath);
 	}
 
 	public String getWorkingResource() {
@@ -143,9 +145,4 @@ public class IrodsDistributedConversionAdapter implements DistributedConversionA
 	public void setWorkingResource(String workingResource) {
 		this.workingResource = workingResource;
 	}
-
-	
-
-	
-
 }

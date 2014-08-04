@@ -41,16 +41,18 @@ import org.slf4j.MDC;
 
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.Appender;
-import de.uzk.hki.da.core.ActionCommunicatorService;
 import de.uzk.hki.da.core.ActionRegistry;
+import de.uzk.hki.da.core.ConfigurationException;
 import de.uzk.hki.da.core.HibernateUtil;
 import de.uzk.hki.da.core.UserException;
 import de.uzk.hki.da.model.CentralDatabaseDAO;
 import de.uzk.hki.da.model.Job;
 import de.uzk.hki.da.model.Node;
 import de.uzk.hki.da.model.Object;
+import de.uzk.hki.da.repository.RepositoryException;
 import de.uzk.hki.da.service.Mail;
 import de.uzk.hki.da.service.UserExceptionManager;
+import de.uzk.hki.da.utils.C;
 import de.uzk.hki.da.utils.LinuxEnvironmentUtils;
 import de.uzk.hki.da.utils.Utilities;
 
@@ -62,15 +64,13 @@ import de.uzk.hki.da.utils.Utilities;
  * Extension notes: In order to extend the BaseAction please follow a few instructions:
  * 
  * <ol><li>Helper methods of extended classes 
- * which should be separetely tested should have default (package) visibility.
+ * which should be separately tested should have default (package) visibility.
  * <li>Constructors which should only be seen by tests should also have default (package) visibility.
  * </ol>
  * @author Daniel M. de Oliveira
  * & the DA-NRW team
  */
 public abstract class AbstractAction implements Runnable {	
-	
-	private String irodsZonePath;
 	
 	private boolean KILLATEXIT = false;
 	private boolean INTEGRATIONTEST = false;
@@ -82,14 +82,14 @@ public abstract class AbstractAction implements Runnable {
 	protected CentralDatabaseDAO dao;
 	protected String startStatus;
 	protected Job job;
+	protected Job toCreate = null;
 	protected Object object;
 	protected String endStatus;
 	protected String description;
 	protected int concurrentJobs = 3;
-	protected ActionCommunicatorService actionCommunicatorService;
 	private UserExceptionManager userExceptionManager;
 	private ActiveMQConnectionFactory mqConnectionFactory;
-	
+	private String systemFromEmailAdress;
 	
 	AbstractAction(){}
 	
@@ -97,14 +97,15 @@ public abstract class AbstractAction implements Runnable {
 	
 	/**
 	 * false means: i (node) am not responsible 
-	 * true means: succesful
+	 * true means: successful
 	 * errors lead to an error status in run()
 	 * 
 	 * For good readability every implementation() should contain only
 	 * the business logic for the action. The details should be package private 
 	 * for unit testing purposes.
+	 * @throws RepositoryException 
 	 */
-	abstract boolean implementation() throws FileNotFoundException, IOException, UserException;
+	abstract boolean implementation() throws FileNotFoundException, IOException, UserException, RepositoryException;
 
 	/**
 	 * Implementations which fail (due to exceptions in implementation() which will be caught in run())
@@ -117,16 +118,19 @@ public abstract class AbstractAction implements Runnable {
 	 * Checks settings that are common for all actions.
 	 * Can be overridden by extensions.
 	 */
-	public void checkCommonPreConditions(){
-		if (dao==null) throw new IllegalStateException("dao not set");
-		if (actionMap==null) throw new IllegalStateException("actionMap not set");
-		if (object==null) throw new IllegalStateException("object not set");
-		if (localNode==null) throw new IllegalStateException("localNode not set");
-		if (job==null) throw new IllegalStateException("job not set");
-		if (object.getContractor()==null) throw new IllegalStateException("contractor not set in job");
+	public void checkCommonPreConditions() throws Exception{
+		if (dao==null) throw new ConfigurationException("dao not set");
+		if (actionMap==null) throw new ConfigurationException("actionMap not set");
+		if (object==null) throw new ConfigurationException("object not set");
+		if (localNode==null) throw new ConfigurationException("localNode not set");
+		if (job==null) throw new ConfigurationException("job not set");
+		if (object.getContractor()==null) throw new ConfigurationException("contractor not set in job");
+		if (userExceptionManager==null) throw new ConfigurationException("user exception manager not set");
+
 		if (object.getContractor().getShort_name()==null) throw new IllegalStateException("contractor short name not set in job");
-		if (actionCommunicatorService==null) throw new IllegalStateException("action communicator service not set");
-		if (userExceptionManager==null) throw new IllegalStateException("user exception manager not set");
+		if (object.getIdentifier()==null) throw new IllegalStateException("object identifier not set");
+		object.getLatestPackage();
+		if (object.getLatestPackage().getContainerName()==null) throw new IllegalStateException("containerName of latest package not set");
 	}
 
 	
@@ -134,8 +138,10 @@ public abstract class AbstractAction implements Runnable {
 		
 		logger.info("Running \""+this.getClass().getName()+"\"");
 		logger.debug(LinuxEnvironmentUtils.logHeapSpaceInformation());
-		checkCommonPreConditions();
 		
+		try {checkCommonPreConditions();} catch (Exception e) {
+			logger.error(e.getMessage()); return;
+		}
 		
 		try {
 			// --- MUST happen before setting up object style logging ---
@@ -145,52 +151,54 @@ public abstract class AbstractAction implements Runnable {
 			object.reattach();
 			logger.info("Stubbing implementation of "+this.getClass().getName());
 			logger.debug(Utilities.getHeapSpaceInformation());
-			if (!implementation()){				
+			
+			boolean implementationExecutionAborted = implementation();
+			
+			Session session = openSession();
+			session.beginTransaction();
+
+			if (!implementationExecutionAborted){				
 				logger.info(this.getClass().getName()+": implementation returned false. Setting job back to start state ("+startStatus+").");  
 				job.setStatus(startStatus);
 				
-				Session session = HibernateUtil.openSession();
-				session.beginTransaction();
+				session.update(object);
 				session.update(job);
-				session.getTransaction().commit();
-				session.close();
-				
 				
 			} else {
-				actionCommunicatorService.serialize();
 				job.setDate_modified(String.valueOf(new Date().getTime()/1000L));
 				if (KILLATEXIT)	{
 					logger.info(this.getClass().getName()+" finished working on job: "+job.getId()+". Now committing changes to database.");
 					job.setStatus(endStatus); // XXX needed just for integration test	
-					Session session = HibernateUtil.openSession();
-					session.beginTransaction();
-					session.delete(job);
 					
 					if (DELETEOBJECT) 
 						session.delete(object);
 					else
 						session.update(object);
+					session.flush();
+
+					session.delete(job);
+					session.flush();
 					
-					session.getTransaction().commit();
-					session.close();
+					if (toCreate!=null) session.save(toCreate);
 					logger.info(this.getClass().getName()+" finished working on job: "+job.getId()+". Job deleted. Database transaction successful.");
 					
 				} else {
 					logger.info(this.getClass().getName()+" finished working on job: "+job.getId()+". Now commiting changes to database.");
 					job.setStatus(endStatus);	
-					Session session = HibernateUtil.openSession();
-					session.beginTransaction();
 					session.update(job);
 					session.update(object);
-					session.getTransaction().commit();
-					session.close();
+					session.flush();
+					if (toCreate!=null) session.save(toCreate);
 					logger.info(this.getClass().getName()+" finished working on job: "+job.getId()+". Set job to end state ("+endStatus+"). Database transaction successful.");
 				}
 			}
 			
+			session.getTransaction().commit();
+			session.close();
+			
 		} catch (UserException e) {
 			logger.error(this.getClass().getName()+": UserException in action: ",e);
-			String errorStatus = getStartStatus().substring(0, getStartStatus().length() - 1) + "4";
+			String errorStatus = getStartStatus().substring(0, getStartStatus().length() - 1) + C.USER_ERROR_STATE_DIGIT;
 			handleError(errorStatus);
 			createUserReport(e);
 			if (e.checkForAdminReport())
@@ -229,8 +237,10 @@ public abstract class AbstractAction implements Runnable {
 			Destination toServer = session.createQueue("CB.ERROR.SERVER");
 			MessageProducer producer;
 			producer = session.createProducer(toClient);
-			producer.setDeliveryMode(DeliveryMode.NON_PERSISTENT);         
-			String messageSend = "Package "+  object.getIdentifier() + " " + e.getMessage();
+			producer.setDeliveryMode(DeliveryMode.NON_PERSISTENT);   
+			String txt =  e.getMessage(); 	
+			if  (e.getMessage()=="null") txt = "-keine weiteren Details- (NPE)"; 	
+			String messageSend = "Package "+  object.getIdentifier() + " " + txt;
 			TextMessage message = session.createTextMessage(messageSend);
 			message.setJMSReplyTo(toServer);
             producer.send(message);
@@ -259,7 +269,7 @@ public abstract class AbstractAction implements Runnable {
 		
 		try{
 			logger.debug("Set job to error state. Commit changes to database now.");
-			Session session = HibernateUtil.openSession();
+			Session session = openSession();
 			session.beginTransaction();
 			session.update(job);
 			session.getTransaction().commit();
@@ -290,7 +300,7 @@ public abstract class AbstractAction implements Runnable {
 		
 		if (email!=null && !email.equals("")) {
 		try {
-			Mail.sendAMail(email, subject, msg);
+			Mail.sendAMail(systemFromEmailAdress, email, subject, msg);
 		} catch (MessagingException ex) {
 			logger.error("Sending email reciept for " + object.getIdentifier() + " failed",ex);
 		}
@@ -307,23 +317,24 @@ public abstract class AbstractAction implements Runnable {
 		
 		String email = object.getContractor().getEmail_contact();
 		String subject = "Fehlerreport für " + object.getIdentifier();
-		String message = userExceptionManager.getMessage(e.getId());
+		String message = userExceptionManager.getMessage(e.getUserExceptionId());
 		
 		message = message.replace("%OBJECT_IDENTIFIER", object.getIdentifier())
 			 .replace("%CONTAINER_NAME", object.getLatestPackage().getContainerName())
 			 .replace("%ERROR_INFO", e.getErrorInfo());
 				
+		
 		logger.debug("Sending mail to: " + email + "\n" + subject + "\n" + message);
 		
-		if (email != null) {			
-			try {
-				Mail.sendAMail(email, subject, message);
-			} catch (MessagingException ex) {
-				logger.error("Sending email reciept for " + object.getIdentifier() + " failed", ex);
-			}
+		if (email == null){
+			logger.warn(object.getContractor().getShort_name() + " has no valid email address!");		
+			return;
 		}
-		else
-			logger.info(object.getContractor().getShort_name() + " has no valid email address!");		
+		try {
+			Mail.sendAMail(systemFromEmailAdress,email, subject, message);
+		} catch (MessagingException ex) {
+			logger.error("Sending email reciept for " + object.getIdentifier() + " failed", ex);
+		}
 	}	
 	
 	/**
@@ -363,10 +374,6 @@ public abstract class AbstractAction implements Runnable {
 		this.endStatus=es;
 	}
 	
-	public void setNode(Node node){
-		this.localNode=node;
-	}
-	
 	public void setJob(Job job){
 		this.job=job;
 	}
@@ -395,14 +402,6 @@ public abstract class AbstractAction implements Runnable {
 		this.dao = dao;
 	}
 
-	public ActionCommunicatorService getActionCommunicatorService() {
-		return actionCommunicatorService;
-	}
-	
-	public void setActionCommunicatorService(ActionCommunicatorService acs) {
-		this.actionCommunicatorService = acs;
-	}
-	
 	public String getStartStatus() {
 		return startStatus;
 	}
@@ -443,15 +442,6 @@ public abstract class AbstractAction implements Runnable {
 		INTEGRATIONTEST = iNTEGRATIONTEST;
 	}
 	
-	public String getIrodsZonePath() {
-		return irodsZonePath;
-	}
-
-	public void setIrodsZonePath(String irodsZonePath) {
-		if (!irodsZonePath.endsWith("/")) irodsZonePath+="/";
-		this.irodsZonePath = irodsZonePath;
-	}
-
 	public Object getObject() {
 		return object;
 	}
@@ -480,5 +470,15 @@ public abstract class AbstractAction implements Runnable {
 		this.mqConnectionFactory = mqConnectionFactory;
 	}
 
-	
+	public Session openSession() {
+		return HibernateUtil.openSession();
+	}
+
+	public String getSystemFromEmailAdress() {
+		return systemFromEmailAdress;
+	}
+
+	public void setSystemFromEmailAddress(String systemFromEmailAdress) {
+		this.systemFromEmailAdress = systemFromEmailAdress;
+	}
 }

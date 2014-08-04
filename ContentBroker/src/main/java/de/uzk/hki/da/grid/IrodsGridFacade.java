@@ -24,14 +24,16 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 
+import javax.naming.ConfigurationException;
+
 import org.apache.commons.io.FilenameUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.util.StringUtils;
 
 import de.uzk.hki.da.model.StoragePolicy;
+import de.uzk.hki.da.utils.C;
 import de.uzk.hki.da.utils.MD5Checksum;
-import de.uzk.hki.da.utils.Utilities;
 
 /**
  * In this implementation the replications are done by creating a thread an doing them synchronously from the thread. 
@@ -46,21 +48,22 @@ public class IrodsGridFacade extends IrodsGridFacadeBase {
 			.getLogger(IrodsGridFacade.class);
 	
 	
+	
 	/* (non-Javadoc)
 	 * @see de.uzk.hki.da.grid.IrodsGridFacadeBase#put(java.io.File, java.lang.String)
 	 */
 	@Override
 	public boolean put(File file, String gridPath , StoragePolicy sp) throws IOException {
 		
-		irodsSystemConnector.connect();
+		if (!irodsSystemConnector.connect()) throw new RuntimeException("could not connect irodsSystemConnector");
 		
 		if (!PrepareReplication(file, gridPath)) return false;
 		
 		String address_dest = gridPath;
 		if (!gridPath.startsWith("/")) 
 			address_dest = "/" + gridPath;
-		String targetPhysically = Utilities.slashize(localNode.getGridCacheAreaRootPath()) + address_dest;
-		String targetLogically  = "/" + irodsSystemConnector.getZone() + address_dest;	
+		String targetPhysically = localNode.getGridCacheAreaRootPath() + "/" + C.AIP + address_dest;
+		String targetLogically  = "/" + irodsSystemConnector.getZone() + "/" + C.AIP  + address_dest;	
 		File gridfile = new File (targetPhysically); 
 		
 		if (registerOnWorkingResourceAndComputeChecksum(file,targetLogically,gridfile))
@@ -114,7 +117,7 @@ public class IrodsGridFacade extends IrodsGridFacadeBase {
 		List<String> targetResgroups = Arrays.asList(localNode.getReplDestinations().split(","));
 		irodsSystemConnector.saveOrUpdateAVUMetadataDataObject(targetLogically, "replicate_to", localNode.getReplDestinations().replace("cp_",""));
 		logger.debug("Starting threads for Replication to " + StringUtils.collectionToDelimitedString(targetResgroups, "|"));
-		Thread  re = new ReplicationExecutor(irodsSystemConnector, localNode.getWorkingResource(), targetResgroups, targetLogically);
+		Thread  re = new ReplicationExecutor(irodsSystemConnector, localNode, targetResgroups, targetLogically);
 		re.start();
 		return true;
 	}
@@ -127,10 +130,16 @@ public class IrodsGridFacade extends IrodsGridFacadeBase {
 	 * @author Jens Peters
 	 */
 	@Override
-	public boolean storagePolicyAchieved(String gridPath, StoragePolicy sp) {
+	public boolean storagePolicyAchieved(String gridPath2, StoragePolicy sp) {
 		irodsSystemConnector.connect();
-		gridPath = "/" + irodsSystemConnector.getZone()  + gridPath;
+		
+		String gridPath = "/" + irodsSystemConnector.getZone() + "/" + C.AIP + "/" + gridPath2;
+		
 		int minNodes = sp.getMinNodes();
+		if (minNodes == 0 ) {
+			logger.error("Given minnodes setting 0 violates long term preservation");
+			return false;
+		}
 		try {
 			logger.debug("checking StoragePolicy achieved for " + gridPath); 
 			List<String> targetResgroups = Arrays.asList(localNode.getReplDestinations().split(","));

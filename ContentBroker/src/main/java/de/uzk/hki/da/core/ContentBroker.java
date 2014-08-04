@@ -20,20 +20,17 @@
 
 package de.uzk.hki.da.core;
 
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.Properties;
 
+import org.apache.activemq.spring.ActiveMQConnectionFactory;
+import org.apache.activemq.xbean.XBeanBrokerService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.support.AbstractApplicationContext;
 import org.springframework.context.support.FileSystemXmlApplicationContext;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.core.task.TaskRejectedException;
-import org.apache.activemq.spring.ActiveMQConnectionFactory;
-import org.apache.activemq.xbean.XBeanBrokerService;
 
 import de.uzk.hki.da.cb.AbstractAction;
 import de.uzk.hki.da.utils.Utilities;
@@ -88,6 +85,17 @@ public class ContentBroker {
 	 */
 	public static void main( String[] args) throws IOException {		
 
+		if ((args.length>0)&&(args[0].equals("createSchema"))){
+			HibernateUtil.createSchema("conf/hibernateCentralDB.cfg.xml");
+		}
+		
+		if ((args.length>0)&&(args[0].equals("diagnostics"))){
+			if (Diagnostics.run()!=0)
+				System.exit(1);
+			else
+				System.exit(0);
+		}
+		
 		logger.info("Starting ContentBroker ..");
 		
 		logger.info("Setting up HibernateUtil ..");
@@ -97,60 +105,18 @@ public class ContentBroker {
 			logger.error("Exception in main!",e);
 		}
 		
-		logger.info("Reading properties");
-		
-		Properties properties = null;
-		InputStream in;
-		try {
-		
-			in = new FileInputStream("conf/config.properties");
-			properties = new Properties();
-			properties.load(in);
-
-		} catch (Exception e) {
-			throw new RuntimeException(e);
-		}
-
-		logger.info("Smoke test the application");
-		
-		boolean ok = true;
-		if (!new File(properties.getProperty("localNode.userAreaRootPath")).exists()){
-			logger.error("path localNode.userAreaRootPath points to not exists");
-			ok=false;
-		}
-		if (!new File(properties.getProperty("localNode.ingestAreaRootPath")).exists()) {
-			logger.error("path localNode.ingestAreaRootPath points to not exists");
-			ok=false;
-		}
-		if (!new File(properties.getProperty("localNode.workAreaRootPath")).exists()) {
-			logger.error("path localNode.workAreaRootPath not exists");
-			ok=false;
-		}
-		if (!new File(properties.getProperty("localNode.dipAreaRootPath")).exists()) {
-			logger.error("path localNode.dipAreaRootPath points to not exists");
-			ok=false;
-		}
-		if (!new File(properties.getProperty("localNode.gridCacheAreaRootPath")).exists()) {
-			logger.error("path localNode.gridCacheAreaRootPath points to not exists");
-			ok=false;
-		}
-		
-		if (!ok) throw new RuntimeException("smoke test not passed. check your properties file");
-		
-		
-		
+		logger.info("Reading properties");		
 		Utilities.parseArguments(args,props);
 		
 		try {
 			AbstractApplicationContext context =
 					new FileSystemXmlApplicationContext("conf/beans.xml");
 			context.registerShutdownHook();
-			
+			logger.info("ContentBroker is up and running");
 		} catch (Exception e) {
 			logger.error("Exception in main!",e);
 		}
 		
-		logger.info("ContentBroker is up and running");
 	}
 	
 	
@@ -169,7 +135,10 @@ public class ContentBroker {
 		logger.trace("scheduling task");		
 		try {
 			AbstractAction action = actionFactory.buildNextAction();
-			if(action != null) taskExecutor.execute(action);
+			if(action != null) {
+				logger.debug("executing... "+action.getName());
+				taskExecutor.execute(action);
+			}
 		} catch (TaskRejectedException e) {
 			logger.warn("Task rejected!",e);
 		} catch (Exception e) {

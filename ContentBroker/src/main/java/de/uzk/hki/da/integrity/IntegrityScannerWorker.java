@@ -17,9 +17,14 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+/**
+ * The package integrity.
+ */
 package de.uzk.hki.da.integrity;
 
+import java.util.Calendar;
 import java.util.Date;
+import java.util.List;
 
 import javax.mail.MessagingException;
 
@@ -43,15 +48,22 @@ import de.uzk.hki.da.service.Mail;
  * and Checksum is of all replicas is correct. 
  * 
  * @author Jens Peters
+ * @author Daniel M. de Oliveira
  *
  */
 public class IntegrityScannerWorker {
 
+	
+	private static class ObjectState {
+		private static final Integer UnderAudit = 60;
+		private static final Integer InWorkflow = 50;
+		private static final Integer Error = 51;
+		private static final Integer archivedAndValidState = 100;
+	}
+	
 	/** The Constant logger. */
 	private static final Logger logger = LoggerFactory.getLogger(IntegrityScannerWorker.class);
 	
-	/** The dao. */
-	private CentralDatabaseDAO dao = null;
 	
 	/** The irods grid connector. */
 	private GridFacade gridFacade;
@@ -62,63 +74,61 @@ public class IntegrityScannerWorker {
 	/** The node admin email. */
 	private String nodeAdminEmail;
 	
-	private String systemName;
-	
-	/** The error state. */
-	private Integer errorState = 51;
-
-	/**
-	 * Inits the.
-	 */
-	public void init(){
-		
-		logger.info("Scanning Table Objects for objects to audit!");
-		
-	}
-	
 	/** The local node name. */
-	private String localNodeName;
+	private String localNodeId;
+	
+	/** The system Email Address */
+	private String systemFromEmailAddress;
+
+
+	private CentralDatabaseDAO dao;
 	
 	/**
 	 * Checking for the AIPs related to this node.
+	 * @author Daniel M. de Oliveira
+	 * @author Jens Peters
 	 */
 	public void scheduleTask(){
+		logger.trace("Scanning AIP s of node " + localNodeId );
+
 		try {
-			if (getDao()==null) {
-				logger.warn("dao is not set yet");
-				return;
-			}
-			logger.debug("Scanning AIP s of node " + localNodeName );
-			Session session = HibernateUtil.openSession();
-			session.beginTransaction();
-			Object obj = getDao().getObjectNeedAudit(session,localNodeName, errorState);
-			session.close();
 			
-			if (obj==null) { 
-				logger.warn("There seems to be none object to check: Database setup?") ;
+			Object object = null;
+			if ((object=getDao().fetchObjectForAudit(localNodeId))==null) { 
+				logger.warn("Found no object to audit.") ;
 				return;
 			}
 			
-			obj.setObject_state(50); // working state 
-			checkObject(obj);
+			Integer auditResult = checkObjectValidity(object);
+			updateObject(object,auditResult);
 			
-			if (obj.getObject_state()==errorState) {
-				sendEmail(obj);
-				
+			if (auditResult==ObjectState.Error) {
+				sendEmail(object);
 			}
-			obj.setLast_checked(new Date());
-			
-			Session session2 = HibernateUtil.openSession();
-			session2.beginTransaction();
-			session2.merge(obj);
-			session2.getTransaction().commit();
-			session2.close();
-			
 			
 		} catch (Exception e) {
 			logger.error("Error in integrityCheck schedule Task " + e.getMessage(),e);
 		}
 	}
+	
+	/**
+	 * Updates the object state, sets the current time, and updates
+	 * the database object accordingly
+	 * @param object
+	 * @param auditResult
+	 */
+	private synchronized void updateObject(Object object,Integer auditResult){
+		
+		object.setLast_checked(new Date());
+		object.setObject_state(auditResult);
+		Session session = HibernateUtil.openSession();
+		session.beginTransaction();
+		session.update(object);
+		session.getTransaction().commit();
+		session.close();
+	}
+	
+	
 	
 	
 	
@@ -128,18 +138,18 @@ public class IntegrityScannerWorker {
 	 *
 	 * @param obj the obj
 	 */
-	void sendEmail(Object obj) {
+	private void sendEmail(Object obj) {
 		// send Mail to Admin with Package in Error
-
-		String subject = "[" + systemName.toUpperCase() +  "] Problem Report für " + obj.getIdentifier() + " auf " + localNodeName;
+		logger.debug("Trying to send email");
+		String subject = "[" + "da-nrw".toUpperCase() +  "] Problem Report für " + obj.getIdentifier() + " auf " + localNodeId;
 		if (nodeAdminEmail != null && !nodeAdminEmail.equals("")) {
 			try {
-				Mail.sendAMail(nodeAdminEmail, subject, "Es gibt ein Problem mit dem Objekt " + obj.getContractor().getShort_name()+ "/" + obj.getIdentifier());
+				Mail.sendAMail(systemFromEmailAddress, nodeAdminEmail, subject, "Es gibt ein Problem mit dem Objekt an Ihrem Knoten " + obj.getContractor().getShort_name()+ "/" + obj.getIdentifier());
 			} catch (MessagingException e) {
 				logger.error("Sending email problem report for " + obj.getIdentifier() + "failed");
 			}
 		} else {
-			logger.warn("Node Admin has no valid Email address!");
+			logger.error("Node Admin has no valid Email address!");
 		}
 	}
 	
@@ -154,7 +164,7 @@ public class IntegrityScannerWorker {
 	 * @return the local node name
 	 */
 	public String getLocalNodeName() {
-		return localNodeName;
+		return localNodeId;
 	}
 
 	/**
@@ -163,27 +173,28 @@ public class IntegrityScannerWorker {
 	 * @param localNodeName the new local node name
 	 */
 	public void setLocalNodeName(String localNodeName) {
-		this.localNodeName = localNodeName;
+		this.localNodeId = localNodeName;
 	}
 
 	/**
-	 * Side effect: set objects state to 100 if complete object is valid and policies achieved.
-	 * or 0 if not valid or policies not achieved for any of the objects packages.
-	 *
+	 * @author Jens Peters
+	 * @author Daniel M. de Oliveira
 	 * @param obj the obj
+	 * @return the new object state. Either archivedAndValidState or errorState.
 	 */
-	void checkObject(Object obj) {
+	int checkObjectValidity(Object obj) {
+		if (minNodes == null || minNodes ==0) throw new IllegalStateException("minNodes not set correctly!");
 		Node node = new Node("tobefactoredout");
 		StoragePolicy sp = new StoragePolicy(node);
+		sp.setMinNodes(minNodes);
 		
-		if (minNodes == null || minNodes ==0) throw new IllegalStateException("minNodes not set correctly!");
 		boolean completelyValid = true;
 		for (Package pack : obj.getPackages()) {
-			String dao = "/aip/"+obj.getContractor().getShort_name()+"/"+obj.getIdentifier()+"/"+obj.getIdentifier()+".pack_" + pack.getName()+".tar"; 
+			String dao = obj.getContractor().getShort_name()+"/"+obj.getIdentifier()+"/"+obj.getIdentifier()+".pack_" + pack.getName()+".tar"; 
 			logger.debug("Checking: " + dao );
 			if (!gridFacade.isValid(dao)) {
 				logger.error("SEVERE FAULT " + dao + " is not valid, Checksum could not be verified on all systems!" );
-				 completelyValid = false;
+				completelyValid = false;
 				continue;
 			}
 			if (!gridFacade.storagePolicyAchieved(dao, sp)) {
@@ -192,8 +203,8 @@ public class IntegrityScannerWorker {
 				continue;
 			}
 		}
-		if (completelyValid) obj.setObject_state(100);
-		else obj.setObject_state(errorState);;
+		if (completelyValid) return ObjectState.archivedAndValidState;
+		else return ObjectState.Error;
 	}
 
 	/**
@@ -242,6 +253,14 @@ public class IntegrityScannerWorker {
 	}
 
 
+	public String getLocalNodeId() {
+		return localNodeId;
+	}
+
+	public void setLocalNodeId(String localNodeId) {
+		this.localNodeId = localNodeId;
+	}
+
 	/**
 	 * Sets the min nodes.
 	 *
@@ -251,42 +270,20 @@ public class IntegrityScannerWorker {
 		this.minNodes = minNodes;
 	}
 
+	public String getSystemFromEmailAddress() {
+		return systemFromEmailAddress;
+	}
 
-
+	public void setSystemFromEmailAddress(String systemFromEmailAddress) {
+		this.systemFromEmailAddress = systemFromEmailAddress;
+	}
 
 	public CentralDatabaseDAO getDao() {
 		return dao;
 	}
 
-
-
-
 	public void setDao(CentralDatabaseDAO dao) {
 		this.dao = dao;
 	}
 
-
-
-
-	/**
-	 * @return the zoneName
-	 */
-	public String getSystemName() {
-		return systemName;
-	}
-
-
-
-
-	/**
-	 * @param zoneName the zoneName to set
-	 */
-	public void setSystemName(String zoneName) {
-		this.systemName = zoneName;
-	}
-	
-	
-	
-	
-	
 }

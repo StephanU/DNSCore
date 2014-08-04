@@ -38,6 +38,7 @@ import org.junit.Test;
 
 import de.uzk.hki.da.model.Node;
 import de.uzk.hki.da.model.StoragePolicy;
+import de.uzk.hki.da.utils.Path;
 
 
 /**
@@ -95,11 +96,15 @@ public class IrodsGridFacadeTest {
 		ig = new IrodsGridFacade();
 		ig.setIrodsSystemConnector(isc);
 		when (isc.computeChecksum(anyString())).thenReturn("abc");
+		when (isc.connect()).thenReturn(true);
+		
 		
 		Node node = new Node();
-		node.setGridCacheAreaRootPath(irodsDir);
-		node.setWorkAreaRootPath(forkDir);
-		node.setReplDestinations("");
+		node.setWorkingResource("cacheresc");
+		node.setGridCacheAreaRootPath(Path.make(irodsDir));
+		node.setWorkAreaRootPath(Path.make(forkDir));
+		node.setReplDestinations("lvr");
+		node.setAdminEmail("test@test.de");
 		ig.setLocalNode(node);
 		when(isc.getZone()).thenReturn("da-nrw");
 		sp = new StoragePolicy(node);
@@ -128,8 +133,8 @@ public class IrodsGridFacadeTest {
 	@Test 
 	public void putFileDoesNotExist() throws Exception {
 		
-		ig.put(temp, "/aip/123456/urn.tar", sp);
-		assertEquals(true, new File(irodsDir+ "/aip/123456/urn.tar").exists());
+		ig.put(temp, "123456/urn.tar", sp);
+		assertTrue(new File(irodsDir+ "/aip/123456/urn.tar").exists());
 	}
 	
 	/**
@@ -145,7 +150,7 @@ public class IrodsGridFacadeTest {
 		
 		when ( isc.fileExists((String)anyString())). thenReturn(true);
 		
-		assertEquals(true,ig.put(temp, "/aip/123456/urn.tar", sp));
+		assertEquals(true,ig.put(temp, "123456/urn.tar", sp));
 		assertEquals(true, new File(irodsDir+ "/aip/123456/urn.tar").exists());
 	}
 	
@@ -172,7 +177,7 @@ public class IrodsGridFacadeTest {
 		
 		// assertEquals(false,ig.put(temp, "aip/123456/urn.tar"));
 		assertEquals(true, temp.exists());
-		assertEquals(true, ig.put(temp, "/aip/123456/urn.tar", sp));
+		assertEquals(true, ig.put(temp, "123456/urn.tar", sp));
 		assertEquals(true, new File(irodsDir+ "/aip/123456/urn.tar").exists());
 	}
 	
@@ -187,7 +192,7 @@ public class IrodsGridFacadeTest {
 		when ( isc.executeRule( anyString(), anyString()) )
 		.thenReturn( "2" );
 		try {
-			ig.put(temp, "/aip/123456/urn.tar",sp);
+			ig.put(temp, "123456/urn.tar",sp);
 			assertTrue(false);
 		} catch (Exception e) {
 			

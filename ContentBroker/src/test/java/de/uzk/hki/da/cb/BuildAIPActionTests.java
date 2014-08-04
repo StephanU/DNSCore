@@ -39,6 +39,8 @@ import de.uzk.hki.da.model.Job;
 import de.uzk.hki.da.model.Node;
 import de.uzk.hki.da.model.Object;
 import de.uzk.hki.da.model.Package;
+import de.uzk.hki.da.utils.Path;
+import de.uzk.hki.da.utils.RelativePath;
 
 
 /**
@@ -46,14 +48,13 @@ import de.uzk.hki.da.model.Package;
  */
 public class BuildAIPActionTests {
 
-	/** The fork path. */
-	static String forkPath = "src/test/resources/cb/BuildAIPActionTests/";
+	static Path workAreaRootPath = new RelativePath("src/test/resources/cb/BuildAIPActionTests/");
 	
 	/** The backup package path. */
-	static String backupPackagePath = forkPath+"csn/95949_/";
+	static Path backupPackagePath = Path.make(workAreaRootPath,"work/csn/95949_/");
 	
 	/** The package fork path. */
-	static String packageForkPath = forkPath+"csn/95949/";
+	static Path packageForkPath = Path.make(workAreaRootPath,"work/csn/95949/");
 	
 	/** The job. */
 	static Job job = new Job("csn","vm3");
@@ -79,7 +80,7 @@ public class BuildAIPActionTests {
 	@BeforeClass
 	public static void setUpBeforeClass(){
 		node.setWorkingResource("vm3");
-		node.setWorkAreaRootPath(forkPath);
+		node.setWorkAreaRootPath(new RelativePath(workAreaRootPath));
 		
 		
 		Package pkg = new Package();
@@ -100,7 +101,7 @@ public class BuildAIPActionTests {
 
 		action.setObject(obj);
 		action.setDao(dao);
-		action.setNode(node);
+		action.setLocalNode(node);
 		action.setJob(job);
 		
 	}
@@ -112,7 +113,7 @@ public class BuildAIPActionTests {
 	 */
 	@Before
 	public void setUp() throws IOException{
-		FileUtils.copyDirectory(new File(backupPackagePath), new File(packageForkPath));
+		FileUtils.copyDirectory(backupPackagePath.toFile(), packageForkPath.toFile());
 	}
 	
 	/**
@@ -122,7 +123,7 @@ public class BuildAIPActionTests {
 	 */
 	@After
 	public void tearDown() throws IOException{
-		if (new File(packageForkPath).exists()) FileUtils.deleteDirectory(new File(packageForkPath)); 
+		if (packageForkPath.toFile().exists()) FileUtils.deleteDirectory(packageForkPath.toFile()); 
 	}
 	
 	/**
@@ -150,7 +151,7 @@ public class BuildAIPActionTests {
 	public void testOnlyNewestRepsSurvive() throws Exception{
 		action.implementation();
 		
-		String children[] = new File(packageForkPath+"data").list(); 
+		String children[] = new File(packageForkPath+"/data").list(); 
 		
 		for (int i=0;i<children.length;i++){
 			if (!children[i].contains(repName) && !children[i].contains("premis")) fail();

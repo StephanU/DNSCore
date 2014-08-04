@@ -9,12 +9,6 @@
            http://www.springframework.org/schema/task
            http://www.springframework.org/schema/task/spring-task-3.0.xsd">
           
-	<bean id="FriendshipConversionAction" class="de.uzk.hki.da.cb.FriendshipConversionAction"
-		scope="prototype">
-		<property name="startStatus" value="580" />
-		<property name="endStatus" value="590" />
-		<property name="name" value="FriendshipConversionAction" />
-	</bean>
 	<bean id="RestartIngestWorkflowAction" class="de.uzk.hki.da.cb.RestartIngestWorkflowAction"
 		scope="prototype">
 		<property name="startStatus" value="600" />
@@ -33,10 +27,10 @@
 		scope="prototype">
 		<property name="startStatus" value="5000" />
 		<property name="endStatus" value="6000" />
-		<property name="minNodes" value="${cb.min_repls}" />
+		<property name="gridRoot" ref="${cb.implementation.grid}"/>
 		<property name="nodeAdminEmail" value="${localNode.admin_email}" />
-		<property name="gridRoot" ref="${grid.implementation}"/>
-		<property name="systemName" value="${irods.zone}"/>
-		<property name="name" value="AuditAction" />
+        <property name="minNodes" value="${system.min_repls}" />
+        <property name="systemFromEmailAddress" value="${system.emailFrom}" />
+		<property name="name" value="AuditAction" /> 
 	</bean>
 </beans>

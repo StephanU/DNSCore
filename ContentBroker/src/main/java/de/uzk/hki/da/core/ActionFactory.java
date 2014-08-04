@@ -23,6 +23,8 @@ package de.uzk.hki.da.core;
 import java.util.List;
 
 import org.apache.activemq.ActiveMQConnectionFactory;
+import org.hibernate.UnresolvableObjectException;
+import org.hibernate.classic.Session;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeansException;
@@ -56,21 +58,15 @@ public class ActionFactory implements ApplicationContextAware {
 	/** The dao. */
 	private CentralDatabaseDAO dao; // Database Connector
 	
-	/** The action communicator service. */
-	private ActionCommunicatorService actionCommunicatorService;
-	
 	/** The user exception manager. */
 	private UserExceptionManager userExceptionManager;
 	
 	/** The context. */
 	private ApplicationContext context;
 	
-	/** The irods zone path. */
-	private String irodsZonePath;
-	
-	/** The admin email. */
-	private String adminEmail;
-	
+	/** The systemFrom Email Adress **/
+	private String systemFromEmailAddress;
+	 
 	/** The on halt. */
 	private boolean onHalt = false;
 	
@@ -93,7 +89,6 @@ public class ActionFactory implements ApplicationContextAware {
 		logger.trace("building action");
 		
 		if (dao == null) throw new ConfigurationException("Unable to build action. DAO has not been set.");
-		if (actionCommunicatorService == null) throw new ConfigurationException("Unable to build action. Action Communicator Service has not been set.");
 		if (actionRegistry == null) throw new ConfigurationException("Unable to build action. Action map has not been set.");
 		if (context == null) throw new ConfigurationException("Unable to build action. Application context has not been set.");
 		if (localNode==null) throw new ConfigurationException("Unable to build action. Node not set.");
@@ -115,24 +110,19 @@ public class ActionFactory implements ApplicationContextAware {
 			
 			Job jobCandidate = dao.fetchJobFromQueue(action.getStartStatus(), workingStatus
 					, localNode);
-			
 			if (jobCandidate == null) {
 				logger.trace("No job for type {}, checking for types with lower priority", jobType);
 				continue;
 			}
-			
-			
-			
-			
 			logger.info("fetched job: {}", jobCandidate);
 
 			actionRegistry.registerAction(action);
+			
 			action.setDao(dao);
-			action.setActionCommunicatorService(actionCommunicatorService);
 			action.setUserExceptionManager(userExceptionManager);
 			action.setMqConnectionFactory(mqConnectionFactory);
-			action.setIrodsZonePath(irodsZonePath);
-			action.setNode(localNode);
+			action.setLocalNode(localNode);
+			action.setSystemFromEmailAddress(systemFromEmailAddress);
 			jobCandidate.getObject().setTransientNodeRef(localNode);
 			action.setObject(jobCandidate.getObject());
 			action.setActionMap(getActionRegistry());			
@@ -143,24 +133,6 @@ public class ActionFactory implements ApplicationContextAware {
 		logger.info("(for local node) No jobs in queue, nothing to do, shoobidoowoo, ...");
 		return null;
 		
-	}
-
-	/**
-	 * Gets the admin email.
-	 *
-	 * @return the admin email
-	 */
-	public String getAdminEmail() {
-		return adminEmail;
-	}
-
-	/**
-	 * Sets the admin email.
-	 *
-	 * @param adminEmail the new admin email
-	 */
-	public void setAdminEmail(String adminEmail) {
-		this.adminEmail = adminEmail;
 	}
 
 	/* (non-Javadoc)
@@ -199,23 +171,6 @@ public class ActionFactory implements ApplicationContextAware {
 		this.actionRegistry = actionRegistry;
 	}
 	
-	/**
-	 * Gets the action communicator service.
-	 *
-	 * @return the action communicator service
-	 */
-	public ActionCommunicatorService getActionCommunicatorService() {
-		return actionCommunicatorService;
-	}
-	
-	/**
-	 * Sets the action communicator service.
-	 *
-	 * @param actionCommunicatorService the new action communicator service
-	 */
-	public void setActionCommunicatorService(ActionCommunicatorService actionCommunicatorService) {
-		this.actionCommunicatorService = actionCommunicatorService;
-	}
 	
 	/**
 	 * Gets the user exception manager.
@@ -244,26 +199,6 @@ public class ActionFactory implements ApplicationContextAware {
 		onHalt  = b;
 	}
 
-
-	/**
-	 * Gets the irods zone path.
-	 *
-	 * @return the irods zone path
-	 */
-	public String getIrodsZonePath() {
-		return irodsZonePath;
-	}
-
-	/**
-	 * Sets the irods zone path.
-	 *
-	 * @param irodsZonePath the new irods zone path
-	 */
-	public void setIrodsZonePath(String irodsZonePath) {
-		if (!irodsZonePath.startsWith("/")) irodsZonePath="/"+irodsZonePath;
-		if (!irodsZonePath.endsWith("/")) irodsZonePath+="/";
-		this.irodsZonePath = irodsZonePath;
-	}
 
 	/**
 	 * Gets the local node.
@@ -295,6 +230,14 @@ public class ActionFactory implements ApplicationContextAware {
 	 */
 	public void setMqConnectionFactory(ActiveMQConnectionFactory mqConnectionFactory) {
 		this.mqConnectionFactory = mqConnectionFactory;
+	}
+
+	public String getSystemFromEmailAddress() {
+		return systemFromEmailAddress;
+	}
+
+	public void setSystemFromEmailAddress(String systemFromEmailAddress) {
+		this.systemFromEmailAddress = systemFromEmailAddress;
 	}
 	
 }

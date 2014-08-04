@@ -19,7 +19,6 @@
 
 package de.uzk.hki.da.cb;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.Date;
 
@@ -36,7 +35,7 @@ import de.uzk.hki.da.model.Node;
 public class CleanWorkAreaAction extends AbstractAction{
 
 	private DistributedConversionAdapter distributedConversionAdapter;
-	private Node dipNode;
+	private Node presentationRepositoryNodeName;
 	
 	
 	@Override
@@ -46,13 +45,11 @@ public class CleanWorkAreaAction extends AbstractAction{
 		
 		// to prevent leftover files from irods collection removal we delete the dirs on the filesystem first.
 		try {
-			FileUtils.deleteDirectory(new File(object.getPath()));
+			FileUtils.deleteDirectory(object.getPath().toFile());
 		} catch (IOException e) {
 			throw new RuntimeException("Exception while deleting \""+
 					object.getPath()+"\"",e);
 		}
-		
-		distributedConversionAdapter.remove(object.getContractor().getShort_name()+"/"+object.getIdentifier());
 		
 		object.getLatestPackage().getFiles().clear();
 		object.getLatestPackage().getEvents().clear();
@@ -67,9 +64,9 @@ public class CleanWorkAreaAction extends AbstractAction{
 	 */
 	private void createPublicationJob(){
 		
-		logger.info("Creating child job with state 540 on "+   getDipNode().getName()+" for possible publication of this object.");
+		logger.info("Creating child job with state 540 on "+   getRepositoryNodeName().getName()+" for possible publication of this object.");
 		Job child = new Job (job, "540");
-		child.setInitial_node(getDipNode().getName());
+		child.setResponsibleNodeName(getRepositoryNodeName().getName());
 		child.setObject(getObject());
 		child.setDate_created(String.valueOf(new Date().getTime()/1000L));
 		
@@ -97,11 +94,11 @@ public class CleanWorkAreaAction extends AbstractAction{
 		this.distributedConversionAdapter = distributedConversionAdapter;
 	}
 
-	public Node getDipNode() {
-		return dipNode;
+	public Node getRepositoryNodeName() {
+		return presentationRepositoryNodeName;
 	}
 
-	public void setDipNode(Node dipNode) {
-		this.dipNode = dipNode;
+	public void setPresentationRepositoryNodeName(Node presentationRepositoryNodeName) {
+		this.presentationRepositoryNodeName = presentationRepositoryNodeName;
 	}
 }

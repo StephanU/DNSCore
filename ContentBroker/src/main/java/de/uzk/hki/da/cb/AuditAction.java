@@ -19,20 +19,19 @@
 
 package de.uzk.hki.da.cb;
 
-import java.io.FileInputStream;
-import java.io.InputStream;
-import java.util.Properties;
-
 import javax.mail.MessagingException;
 
 import org.apache.commons.lang.NotImplementedException;
 
+import de.uzk.hki.da.core.ConfigurationException;
 import de.uzk.hki.da.grid.GridFacade;
 import de.uzk.hki.da.model.Job;
 import de.uzk.hki.da.model.Object;
 import de.uzk.hki.da.model.Package;
 import de.uzk.hki.da.model.StoragePolicy;
 import de.uzk.hki.da.service.Mail;
+import de.uzk.hki.da.utils.Path;
+import de.uzk.hki.da.utils.RelativePath;
 
 /**
  * Audit Action.
@@ -46,10 +45,17 @@ public class AuditAction extends AbstractAction {
 
 	
 	private String nodeAdminEmail;
-	private int minNodes = 3;
+	private String systemFromEmailAddress;
+
+
+	private int minNodes;
 	private GridFacade gridRoot;
-	private int errorState = 51;
-	private String systemName;
+
+	private static class ObjectState {
+		private static final Integer UnderAudit = 60;
+		private static final Integer Error = 51;
+		private static final Integer archivedAndValidState = 100;
+	}
 	/*
 	 * 
 	 * (non-Javadoc)
@@ -57,25 +63,14 @@ public class AuditAction extends AbstractAction {
 	 */
 	@Override
 	boolean implementation() {
+		if (getGridRoot()==null) throw new ConfigurationException("gridRoot not set");
+		if (nodeAdminEmail == null) throw new ConfigurationException("nodeAdminEmail is null!");
+		if (minNodes==0) throw new ConfigurationException("minNodes, 0 is not allowed!");
+		if (systemFromEmailAddress==null)  throw new ConfigurationException("systemFromEmailAdress is not set!");
 		setKILLATEXIT(true);
-		
-		Properties properties = null;
-		InputStream in;
-		try {
-		
-			in = new FileInputStream("conf/config.properties");
-			properties = new Properties();
-			properties.load(in);
-
-		} catch (Exception e) {
-			throw new RuntimeException(e);
-		}
-		
-		
-		setObjectState(job,50);
-		
+		setObjectState(job,ObjectState.UnderAudit);
 		StoragePolicy sp = new StoragePolicy(localNode);
-		sp.setMinNodes(Integer.parseInt(((String)properties.getProperty("cb.min_repls"))));
+		sp.setMinNodes(minNodes);
 		
 		String msg= "";
 		// TODO: refactor to same implementation IntegrityScanner uses
@@ -83,9 +78,7 @@ public class AuditAction extends AbstractAction {
 		for (Package pack : object.getPackages()) {
 			String pname = pack.getName();
 			if (pname.equals("")) pname = "1";
-			String logicalPath = "/aip/"+object.getContractor().getShort_name() + "/" +object.getIdentifier() +"/"+
-					object.getIdentifier() + ".pack_"+pname+".tar";
-			
+			String logicalPath = new RelativePath(object.getContractor().getShort_name(), object.getIdentifier(), object.getIdentifier()).toString() + ".pack_"+pname+".tar";
 			if (!gridRoot.isValid(logicalPath)) {
 				msg+="SEVERE FAULT " + logicalPath + " is not valid, Checksum could not be verified on all systems! Please refer to the Storage Layer logs for further information! \n";
 				 completelyValid = false;
@@ -99,9 +92,9 @@ public class AuditAction extends AbstractAction {
 		}
 		if (completelyValid) {
 			logger.debug("Object checked OK, setting object state to 100");
-			object.setObject_state(100);
+			object.setObject_state(ObjectState.archivedAndValidState);
 		} else {
-			object.setObject_state(errorState);
+			object.setObject_state(ObjectState.Error);
 			logger.error("Object " + object.getIdentifier()  + " has following errors :" +  msg);
 			unloadAndRepair(object);
 			informNodeAdmin(object, msg);
@@ -125,15 +118,15 @@ public class AuditAction extends AbstractAction {
 	void informNodeAdmin(Object obj, String msg) {
 		// send Mail to Admin with Package in Error
 
-		String subject = "[" + systemName + "] Problem Report für " + obj.getIdentifier();
-		if (nodeAdminEmail != null && !nodeAdminEmail.equals("")) {
+		String subject = "[" + "da-nrw".toUpperCase() + "] Problem Report für " + obj.getIdentifier();
+		if (nodeAdminEmail != null && !nodeAdminEmail.equals("") && getSystemFromEmailAdress() != null && !getSystemFromEmailAdress().equals("")) {
 			try {
-				Mail.sendAMail(nodeAdminEmail, subject, msg);
+				Mail.sendAMail(getSystemFromEmailAdress(), nodeAdminEmail, subject, msg);
 			} catch (MessagingException e) {
 				logger.error("Sending email problem report for " +  obj.getIdentifier() + " failed");
 			}
 		} else {
-			logger.warn("Node Admin has no valid Email address!");
+			logger.error("Node Admin / SystemFromEmail has no be a valid Email address!");
 		}
 	}
 	
@@ -185,18 +178,12 @@ public class AuditAction extends AbstractAction {
 	public void setGridRoot(GridFacade gridRoot) {
 		this.gridRoot = gridRoot;
 	}
-
-	/**
-	 * @return the zoneName
-	 */
-	public String getSystemName() {
-		return systemName;
+	public String getSystemFromEmailAddress() {
+		return systemFromEmailAddress;
 	}
 
-	/**
-	 * @param zoneName the zoneName to set
-	 */
-	public void setSystemName(String zoneName) {
-		this.systemName = zoneName;
+	public void setSystemFromEmailAddress(String systemFromEmailAddress) {
+		this.systemFromEmailAddress = systemFromEmailAddress;
 	}
+
 }

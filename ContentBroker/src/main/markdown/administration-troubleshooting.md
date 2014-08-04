@@ -17,8 +17,7 @@
 	  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 	*/
 
-As you have already read in the administration.md (if you don't have, do it first),
-the WorkArea is the space where the ContentBroker manipulates the contents of objects. In a step by step
+As you might have already read the WorkArea is the space where the ContentBroker manipulates the contents of objects. In a step by step
 transition, it transforms contents of objects. Depending on the workflow, that means adding data
 (by conversion or adding metadata), or removing of data (for DIPs or presentation). In any case the main unit
 of operation is an unpacked object which comes either from the IngestArea or the LZAArea or both (in case of deltas).
@@ -27,7 +26,27 @@ the possible workflows of the ContentBroker. Any workflow consists of small, wel
 the actions in workflows can vary slightly over time, we will try to not mention the specifics in this document.
 Instead, please consider the sources if you want to know more about the structure of the workflows:
 
-https://github.com/da-nrw/DNSCore/blob/master/ContentBroker/src/main/resources/META-INF/beans-actions.xml (Ingest-Workflow)
+https://github.com/da-nrw/DNSCore/blob/master/ContentBroker/src/main/resources/META-INF/beans-workflow.ingest.xml (Ingest-Workflow)
+
+### Diagnostics mode in ContentBroker - Smoke test
+
+To perform basis tests on your configured ContentBroker you could run the CB in diagnostics mode
+
+    java -jar ContentBroker.jar diagnostics
+    
+The fature performs some basic tests on your node. The result depends on your installation scope (presentational node, simple node or fully fledged) but should always give OK results as shown below (shown from a fully fledged version)  
+
+    Smoke test the application
+    CHECKING JHOVE: OK
+    CHECKING LOCAL NODE PATHS: OK
+    CHECKING IRODS CONNECTION: OK
+    CHECKING GRID FACADE PUT: OK
+    CHECKING GRID FACADE GET: OK
+    CHECKING PRONOM FORMAT IDENTIFIER: OK
+    CHECKING VIDEO FORMAT IDENTIFIER: OK
+    CHECKING FEDORA CONNECTIVITY: OK
+    There were no errors.
+
 
 ### Ingest Workflow - Error handling
 
@@ -49,7 +68,7 @@ the unpacked object is an well defined state again. So, a job in state 120 and a
 physical file system and database state.
 
 #### xx2
-This is the working state
+This is the working state. Normally shown, while CB is working. 
 
 #### xx4
 These are states where an error occured due to imcomplete or inconsistent data caused by the user. The xx4 states always result 
@@ -61,19 +80,46 @@ a new object the orig name is reusable again. The urn which was given to the obj
 
 #### 123 - 353 (only xx3)
 
+Failures in the error range 123-383 could be handled with DA-WEB. 
+Whenever possible, Deletion buttons are shown. 
+
+For recovering bunches of Packages you might consider a rollback via Database. 
+Just set the packages in state '600' for a clean rollback, BUT check the error 
+and the error codes first!
 
 #### Deletion
+
+Sometimes manuallay deletion of packages is needed on your system. 
+Please examine the error logfiles at your node. 
+
+For recovering bunches of Packages you might consider a rollback via Database. 
+Just set the packages in state '800' for a clean deletion, BUT check the error 
+and the error codes first! Only packages lower then 400 are deleteable, because otherwise they are archived!
 
 #### Error Handling in DA-WEB
 
 Please refer to the documents added under Daweb/docs
 
-## Basic concepts
-
 ## Logging
 
-log/contentbroker.log
-log/grid.log
-log/object-logs/[oid].log
+(Taken from and referred to your systems logback.conf)
 
-## Controlling
+ContentBroker main logfile, first look here:
+
+    log/contentbroker.log
+ 
+The irods-ContentBroker bridge
+    
+    log/grid.log
+    
+One logfile per each Objekt(Package) refer to it from the DA-WEB Queue view. 
+
+    log/object-logs/[oid].log
+    
+The audit errors are listed here
+
+     log/audit.log
+     
+For an overview how to start services look [here](administration-services.md)
+
+

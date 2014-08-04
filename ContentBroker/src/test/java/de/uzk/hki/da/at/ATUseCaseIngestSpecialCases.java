@@ -19,7 +19,6 @@
 
 package de.uzk.hki.da.at;
 
-import java.io.File;
 import java.io.IOException;
 
 import org.apache.commons.io.FileUtils;
@@ -28,16 +27,15 @@ import org.junit.Before;
 import org.junit.Test;
 
 import de.uzk.hki.da.model.Object;
+import de.uzk.hki.da.utils.Path;
 
 /**
  * Relates to AK-T/02 Ingest - Sunny Day Szenario (mit besonderen Bedingungen).
  * @author Daniel M. de Oliveira
- *
  */
 public class ATUseCaseIngestSpecialCases extends Base{
 
 	private String originalName = "ATUseCaseIngest1";
-	private String containerName = originalName+".tgz";
 	private Object object;
 	
 	@Before
@@ -46,13 +44,13 @@ public class ATUseCaseIngestSpecialCases extends Base{
 	}
 	
 	@After
-	public void tearDown() throws IOException{
+	public void tearDown(){
 		
-		FileUtils.deleteDirectory(new File(workAreaRootPath+"TEST/"+object.getIdentifier()));
-		
-		new File(ingestAreaRootPath+"TEST/AT_CON1.tar").delete();
-		new File(ingestAreaRootPath+"TEST/AT_CON2.tgz").delete();
-		new File(ingestAreaRootPath+"TEST/AT_CON3.zip").delete();
+		FileUtils.deleteQuietly(Path.make(localNode.getWorkAreaRootPath(),"/work/TEST/"+object.getIdentifier()).toFile());
+
+		Path.make(localNode.getIngestAreaRootPath(),"/TEST/AT_CON1.tar").toFile().delete();
+		Path.make(localNode.getIngestAreaRootPath(),"/TEST/AT_CON2.tgz").toFile().delete();
+		Path.make(localNode.getIngestAreaRootPath(),"/TEST/AT_CON3.zip").toFile().delete();
 		
 		clearDB();
 		cleanStorage();
@@ -62,14 +60,7 @@ public class ATUseCaseIngestSpecialCases extends Base{
 	public void testUmlautsInPackageName() throws Exception{
 		
 		originalName = "ATÜÄÖ";
-		containerName = originalName+".tgz";
-				
-		FileUtils.copyFileToDirectory(new File("src/test/resources/at/"+containerName), 
-				new File(ingestAreaRootPath+"TEST"));
-		waitForJobsToFinish(originalName,2000);
-		object = fetchObjectFromDB(originalName);
-		System.out.println("objectIdentifier: "+object.getIdentifier());
-		
+		object = ingest(originalName);
 		System.out.println("yeah!");
 	}
 	
@@ -77,14 +68,7 @@ public class ATUseCaseIngestSpecialCases extends Base{
 	public void testSpecialCharactersInFileNames() throws Exception{
 		
 		originalName = "ATSonderzeichen_in_Dateinamen";
-		containerName = originalName+".tgz";
-				
-		FileUtils.copyFileToDirectory(new File("src/test/resources/at/"+containerName), 
-				new File(ingestAreaRootPath+"TEST"));
-		waitForJobsToFinish(originalName,2000);
-		object = fetchObjectFromDB(originalName);
-		System.out.println("objectIdentifier: "+object.getIdentifier());
-		
+		object = ingest(originalName);
 		System.out.println("yeah!");
 	}
 	
@@ -92,14 +76,7 @@ public class ATUseCaseIngestSpecialCases extends Base{
 	public void testUmlautsInFileNames() throws Exception{
 		
 		originalName = "ATUmlaute_in_Dateinamen";
-		containerName = originalName+".tgz";
-				
-		FileUtils.copyFileToDirectory(new File("src/test/resources/at/"+containerName), 
-				new File(ingestAreaRootPath+"TEST"));
-		waitForJobsToFinish(originalName,2000);
-		object = fetchObjectFromDB(originalName);
-		System.out.println("objectIdentifier: "+object.getIdentifier());
-		
+		object = ingest(originalName);
 		System.out.println("yeah!");
 	}
 	
@@ -107,14 +84,7 @@ public class ATUseCaseIngestSpecialCases extends Base{
 	public void testTARContainer() throws Exception{
 		
 		originalName = "AT_CON1";
-		containerName = originalName+".tar";
-				
-		FileUtils.copyFileToDirectory(new File("src/test/resources/at/"+containerName), 
-				new File(ingestAreaRootPath+"TEST"));
-		waitForJobsToFinish(originalName,2000);
-		object = fetchObjectFromDB(originalName);
-		System.out.println("objectIdentifier: "+object.getIdentifier());
-		
+		object = ingest(originalName,"tar");
 		System.out.println("yeah!");
 	}
 	
@@ -122,11 +92,7 @@ public class ATUseCaseIngestSpecialCases extends Base{
 	public void testTGZContainer() throws Exception{
 		
 		originalName = "AT_CON2";
-		ingest(originalName);
-		
-		object = fetchObjectFromDB(originalName);
-		System.out.println("objectIdentifier: "+object.getIdentifier());
-		
+		object = ingest(originalName);
 		System.out.println("yeah!");
 	}
 	
@@ -134,14 +100,7 @@ public class ATUseCaseIngestSpecialCases extends Base{
 	public void testZIPContainer() throws Exception{
 		
 		originalName = "AT_CON3";
-		containerName = originalName+".zip";
-				
-		FileUtils.copyFileToDirectory(new File("src/test/resources/at/"+containerName), 
-				new File(ingestAreaRootPath+"TEST"));
-		waitForJobsToFinish(originalName,2000);
-		object = fetchObjectFromDB(originalName);
-		System.out.println("objectIdentifier: "+object.getIdentifier());
-		
+		object = ingest(originalName,"zip");
 		System.out.println("yeah!");
 	}
 	
@@ -149,12 +108,7 @@ public class ATUseCaseIngestSpecialCases extends Base{
 	public void testSpecialCharsInPackageName() throws Exception{
 		
 		originalName = "AT&Sonderzeichen%in#Paketnamen";
-		ingest(originalName);
-		
-		
-		object = fetchObjectFromDB(originalName);
-		System.out.println("objectIdentifier: "+object.getIdentifier());
-		
+		object = ingest(originalName);
 		System.out.println("yeah!");
 	}
 	
@@ -164,11 +118,7 @@ public class ATUseCaseIngestSpecialCases extends Base{
 	public void testWhiteSpacesInFileNames() throws Exception{
 		
 		originalName = "ATLeerzeichen_in_Dateinamen";
-		ingest(originalName);
-		
-		object = fetchObjectFromDB(originalName);
-		System.out.println("objectIdentifier: "+object.getIdentifier());
-		
+		object = ingest(originalName);
 		System.out.println("yeah!");
 	}
 }

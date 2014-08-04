@@ -86,7 +86,7 @@ public class IngestAreaScannerWorker {
 	private String ingestAreaRootPath;
 	
 	/** The local node name. */
-	private String localNodeName;
+	private String localNodeId;
 	
 	/**
 	 * 
@@ -95,9 +95,6 @@ public class IngestAreaScannerWorker {
 	
 	/** The register object service. */
 	private RegisterObjectService registerObjectService;
-	
-	/** The local node. */
-	private Node localNode;
 	
 	/** The root dir. */
 	File rootDir = null; 
@@ -133,6 +130,7 @@ public class IngestAreaScannerWorker {
 			logger.warn("dao is not set yet");
 			return;
 		}
+	
 		
 		try {
 		
@@ -160,7 +158,7 @@ public class IngestAreaScannerWorker {
 							session2,
 							contractor, 
 							convertMaskedSlashes(FilenameUtils.removeExtension(child)),
-							localNodeName,
+							localNodeId,
 							object);
 					session2.getTransaction().commit();
 					session2.close();
@@ -277,8 +275,8 @@ public class IngestAreaScannerWorker {
 	 *
 	 * @return the local node name
 	 */
-	public String getLocalNodeName() {
-		return localNodeName;
+	public String getLocalNodeId() {
+		return localNodeId;
 	}
 
 	/**
@@ -286,8 +284,8 @@ public class IngestAreaScannerWorker {
 	 *
 	 * @param localNodeName the new local node name
 	 */
-	public void setLocalNodeName(String localNodeName) {
-		this.localNodeName = localNodeName;
+	public void setLocalNodeId(String localNodeId) {
+		this.localNodeId = localNodeId;
 	}
 
 	/**
@@ -306,24 +304,6 @@ public class IngestAreaScannerWorker {
 	 */
 	public void setRegisterObjectService(RegisterObjectService registerObjectService) {
 		this.registerObjectService = registerObjectService;
-	}
-
-	/**
-	 * Gets the local node.
-	 *
-	 * @return the local node
-	 */
-	public Node getLocalNode() {
-		return localNode;
-	}
-
-	/**
-	 * Sets the local node.
-	 *
-	 * @param localNode the new local node
-	 */
-	public void setLocalNode(Node localNode) {
-		this.localNode = localNode;
 	}
 
 	public CentralDatabaseDAO getDao() {

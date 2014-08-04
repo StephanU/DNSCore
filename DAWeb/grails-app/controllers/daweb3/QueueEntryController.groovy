@@ -40,21 +40,33 @@ class QueueEntryController {
     }
 
     def list() {
-        
-		
+		def contractorList
+		def cbNodeList = CbNode.list()
+		if (session.contractor.admin == 1) {	
+			contractorList = Contractor.list()
+		} else {
+			contractorList = Contractor.findAll("from Contractor as c where c.shortName=:csn",
+	        [csn: session.contractor.shortName])
+		}
+		[contractorList:contractorList,
+		cbNodeList:cbNodeList]
     }
     
+
     def listSnippet() {
     	def queueEntries = null	
 		def admin = false
 		def periodical = true;	
+		def contractorList = Contractor.list()
+		
 		if (params.search==null){		
-			if (session.contractor.admin != 1) {
+			if (session.contractor.admin != 1) {	
 				queueEntries = QueueEntry.findAll("from QueueEntry as q where q.obj.contractor.shortName=:csn",
 	             [csn: session.contractor.shortName])
 			} else {
 				admin = true;
-				queueEntries = QueueEntry.findAll(params)
+				queueEntries = QueueEntry.findAll("from QueueEntry as q")
+				
 			}
 			[queueEntryInstanceList: queueEntries,
 				admin:admin, periodical:periodical ]
@@ -71,6 +83,11 @@ class QueueEntryController {
 						}
 					}
 				}
+				if (params.search?.initialNode) { 
+					if (params.search?.initialNode !="null"){ 
+						like("initialNode", params.search.initialNode+"%")
+					}
+				}
 				if (params.search?.status) 
 					like("status", params.search.status+"%")
 				if (session.contractor.admin==0) {
@@ -84,13 +101,28 @@ class QueueEntryController {
 					}
 				} else {
 				admin = true;
+				if (params.search?.contractor){
+					if(params.search?.contractor !="null"){
+						projections {
+							obj {
+									contractor {
+										eq("shortName", params.search.contractor)
+									}
+								}
+							}	
+						}
+					}
 				}
 			}
 		} 
 		[queueEntryInstanceList: queueEntries,
-			admin:admin, periodical:periodical ]
+			admin:admin, periodical:periodical,
+			contractorList:contractorList ]
     }
-
+	
+	/** 
+	 * Generates detailed view for one item (SIP) in workflow
+	 */
     def show() {
         def queueEntryInstance = QueueEntry.get(params.id)
         if (!queueEntryInstance) {
@@ -102,6 +134,9 @@ class QueueEntryController {
         [queueEntryInstance: queueEntryInstance]
     }
 	
+	/**
+	 * Applies button and functionality to retry the last workflow step for an item
+	 */
 	def queueRetry() {
 		def queueEntryInstance = QueueEntry.get(params.id)
 		if (queueEntryInstance) {
@@ -129,6 +164,9 @@ class QueueEntryController {
 		[queueEntryInstance: queueEntryInstance]
 	}
 	
+	/**
+	 * Applies button and functionality to recover all the workflow for an item
+	 */
 	def queueRecover() {
 		def queueEntryInstance = QueueEntry.get(params.id)
 		if (queueEntryInstance) {
@@ -157,6 +195,10 @@ class QueueEntryController {
 
 		[queueEntryInstance: queueEntryInstance]
 	}
+	
+	/**
+	 * Applies button and functionality to remove an item from ContentBroker workflow
+	 */
 	def queueDelete() {
 		def queueEntryInstance = QueueEntry.get(params.id)
 		if (queueEntryInstance) {

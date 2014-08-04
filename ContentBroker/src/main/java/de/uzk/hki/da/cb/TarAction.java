@@ -22,9 +22,6 @@ package de.uzk.hki.da.cb;
 import java.io.File;
 import java.io.IOException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import de.uzk.hki.da.core.ConfigurationException;
 import de.uzk.hki.da.grid.DistributedConversionAdapter;
 import de.uzk.hki.da.utils.MD5Checksum;
@@ -51,7 +48,6 @@ import de.uzk.hki.da.utils.NativeJavaTarArchiveBuilder;
  */
 public class TarAction extends AbstractAction {
 	
-	static final Logger logger = LoggerFactory.getLogger(TarAction.class);
 	private DistributedConversionAdapter distributedConversionAdapter;
 	private String tar = null;
 	
@@ -61,7 +57,7 @@ public class TarAction extends AbstractAction {
 	boolean implementation() throws IOException {
 		if (distributedConversionAdapter==null) throw new ConfigurationException("distributedConversionAdapter not set");
 		
-		tar = localNode.getWorkAreaRootPath() + 
+		tar = localNode.getWorkAreaRootPath() + "/work/" +
 				object.getContractor().getShort_name() + "/" + object.getIdentifier() 
 				+ ".pack_" + object.getLatestPackage().getName() + ".tar";
 		
@@ -69,7 +65,7 @@ public class TarAction extends AbstractAction {
 		try {
 			NativeJavaTarArchiveBuilder builder = new NativeJavaTarArchiveBuilder();
 			builder.setFirstLevelEntryName(object.getIdentifier()+".pack_"+object.getLatestPackage().getName());
-			builder.archiveFolder(new File(object.getPath()),new File(tar),true);
+			builder.archiveFolder(object.getPath().toFile(),new File(tar),true);
 			
 		} catch (Exception e) {
 			throw new RuntimeException("Error while creating tar.",e);

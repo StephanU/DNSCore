@@ -21,7 +21,9 @@ package de.uzk.hki.da.cb;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.mockito.Matchers.anyObject;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -38,16 +40,18 @@ import org.jdom.Namespace;
 import org.jdom.input.SAXBuilder;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
-import de.uzk.hki.da.core.ActionCommunicatorService;
 import de.uzk.hki.da.model.CentralDatabaseDAO;
 import de.uzk.hki.da.model.DAFile;
 import de.uzk.hki.da.model.Event;
 import de.uzk.hki.da.model.Job;
 import de.uzk.hki.da.model.Node;
 import de.uzk.hki.da.model.Object;
-import de.uzk.hki.da.service.UpdateMetadataService;
+import de.uzk.hki.da.service.MimeTypeDetectionService;
+import de.uzk.hki.da.utils.Path;
+import de.uzk.hki.da.utils.RelativePath;
 import de.uzk.hki.da.utils.TESTHelper;
 
 
@@ -56,8 +60,9 @@ import de.uzk.hki.da.utils.TESTHelper;
  */
 public class UpdateMetadataActionTests {
 	
-	/** The Constant basePath. */
-	private static final String basePath = "src/test/resources/cb/UpdateMetadataActionTests/";
+	private static MimeTypeDetectionService mtds;
+	
+	private static final Path workAreaPath = new RelativePath("src/test/resources/cb/UpdateMetadataActionTests/");
 	
 	/** The Constant METS_NS. */
 	private static final Namespace METS_NS = Namespace.getNamespace("http://www.loc.gov/METS/");
@@ -75,25 +80,32 @@ public class UpdateMetadataActionTests {
 	 * Sets the up.
 	 * @throws IOException 
 	 */
+	
+	@BeforeClass
+	public static void mockDca() throws IOException {
+		mtds = mock(MimeTypeDetectionService.class);
+		when(mtds.detectMimeType((DAFile)anyObject())).thenReturn("image/tiff");
+	}
+	
 	@Before
 	public void setUp() throws IOException {		
 		action = new UpdateMetadataAction();		
 		node = new Node();
 		node.setWorkingResource("vm3");
-		node.setWorkAreaRootPath(basePath);
-		action.setNode(node);	
+		node.setWorkAreaRootPath(Path.make(workAreaPath));
+		action.setLocalNode(node);	
 		
 		FileUtils.copyDirectoryToDirectory(new File("src/main/xslt"), new File("conf/"));
 	}
 	
 	@After
 	public void tearDown () throws IOException {
-		new File(basePath + "TEST/23/data/dip/institution/DC.xml").delete();
-		new File(basePath + "TEST/23/data/dip/institution/METS.xml").delete();
-		new File(basePath + "TEST/23/data/dip/public/DC.xml").delete();
-		new File(basePath + "TEST/23/data/dip/public/METS.xml").delete();
-		new File(basePath + "TEST/42/data/DC_.xml").delete();
-		FileUtils.deleteDirectory(new File(basePath + "TEST/42/data/dip"));
+		new File(workAreaPath + "/work/TEST/23/data/dip/institution/DC.xml").delete();
+		new File(workAreaPath + "/work/TEST/23/data/dip/institution/METS.xml").delete();
+		new File(workAreaPath + "/work/TEST/23/data/dip/public/DC.xml").delete();
+		new File(workAreaPath + "/work/TEST/23/data/dip/public/METS.xml").delete();
+		new File(workAreaPath + "/work/TEST/42/data/DC_.xml").delete();
+		FileUtils.deleteDirectory(new File(workAreaPath + "/TEST/42/data/dip"));
 		FileUtils.deleteDirectory(new File("conf/xslt"));
 	}
 	
@@ -109,7 +121,7 @@ public class UpdateMetadataActionTests {
 	@Test
 	public void testWritePackageTypeToDC() throws FileNotFoundException, JDOMException, IOException {
 		
-		Object o = TESTHelper.setUpObject("42",basePath);
+		Object o = TESTHelper.setUpObject("42",workAreaPath);
 		
 		o.getLatestPackage().getFiles().add(new DAFile(o.getLatestPackage(), "dip/public", "DC.xml"));
 		o.getLatestPackage().getFiles().add(new DAFile(o.getLatestPackage(), "dip/institution", "DC.xml"));
@@ -118,15 +130,16 @@ public class UpdateMetadataActionTests {
 		job.setRep_name("rep42");
 		job.setObject(o);
 		
+		action.setMtds(mtds);
 		action.setObject(o);
 		action.setJob(job);
 		
 		action.setRepNames(new String[]{"dip/public", "dip/institution"});
 
-		String dcPath = o.getDataPath() + "test_dc.xml";
+		String dcPath = o.getDataPath() +"/"+ "test_dc.xml";
 		File dcFile = new File(dcPath);
-		File publicDcFile = new File(o.getDataPath() + "dip/public/DC.xml");
-		File instDcFile = new File(o.getDataPath() + "dip/institution/DC.xml");
+		File publicDcFile = new File(o.getDataPath() + "/dip/public/DC.xml");
+		File instDcFile = new File(o.getDataPath() + "/dip/institution/DC.xml");
 		FileUtils.copyFile(dcFile, publicDcFile);
 		FileUtils.copyFile(dcFile, instDcFile);
 		
@@ -161,7 +174,7 @@ public class UpdateMetadataActionTests {
 	@Test
 	public void testUpdatePathsInMetadata() throws FileNotFoundException, JDOMException, IOException {
 		
-		Object obj = TESTHelper.setUpObject("23",basePath);
+		Object obj = TESTHelper.setUpObject("23",workAreaPath);
 
 		DAFile t1 = new DAFile(obj.getLatestPackage(), "dip/public", "Ye_old_duckroll.jpg");
 		DAFile t2 = new DAFile(obj.getLatestPackage(), "dip/institution", "Ye_old_duckroll.jpg");
@@ -192,33 +205,32 @@ public class UpdateMetadataActionTests {
 		job.setObject(obj);
 		job.setRep_name("rep42");
 
-		String metsPath = obj.getDataPath() + "rep/mets.xml";
+		String metsPath = Path.make( obj.getDataPath(), "rep/mets.xml").toString();
 		File metsFile = new File(metsPath);
-		File publicMetsFile = new File(obj.getDataPath() + "dip/public/mets.xml");
-		File instMetsFile = new File(obj.getDataPath() + "dip/institution/mets.xml");
+		File publicMetsFile = new File(obj.getDataPath() + "/dip/public/mets.xml");
+		File instMetsFile = new File(obj.getDataPath() + "/dip/institution/mets.xml");
 		FileUtils.copyFile(metsFile, publicMetsFile);
 		FileUtils.copyFile(metsFile, instMetsFile);
 		
+		action.setMtds(mtds);
 		action.setObject(obj);
 		action.setJob(job);
-		action.setActionCommunicatorService(new ActionCommunicatorService());
-		action.getActionCommunicatorService().addDataObject(job.getId(), "package_type", "METS");
-		action.getActionCommunicatorService().addDataObject(job.getId(), "metadata_file", "mets.xml");
-
+		
+		obj.setMetadata_file("mets.xml");
+		obj.setPackage_type("METS");
+		
 		CentralDatabaseDAO dao = mock(CentralDatabaseDAO.class);
 		action.setDao(dao);
 		
-		UpdateMetadataService service = new UpdateMetadataService();
 		HashMap<String,String> xpaths = new HashMap<String,String>();
-		xpaths.put("METS", "//mets:FLocat/@xlink:href");
-		service.setXpathsToUrls(xpaths);
+		xpaths.put("METS", "//mets:file");
+		action.setXpathsToUrls(xpaths);
 		
 		HashMap<String, String> nsMap = new HashMap<String,String>();
 		nsMap.put("mets", METS_NS.getURI());
 		nsMap.put("xlink", XLINK_NS.getURI());
-		service.setNamespaces(nsMap);
+		action.setNamespaces(nsMap);
 		
-		action.setUpdateMetadataService(service);		
 		action.setRepNames(new String[]{"dip/public", "dip/institution"});
 		Map<String, String> dcMappings = new HashMap<String,String>();
 		dcMappings.put("METS", "conf/xslt/dc/mets-mods_to_dc.xsl");
@@ -227,7 +239,7 @@ public class UpdateMetadataActionTests {
 		action.implementation();
 		
 		SAXBuilder builder = new SAXBuilder();
-		Document doc = builder.build(new FileReader(new File(basePath + "TEST/23/data/dip/public/METS.xml")));
+		Document doc = builder.build(new FileReader(new File(workAreaPath + "/work/TEST/23/data/dip/public/METS.xml")));
 
 		String url = doc.getRootElement()
 				.getChild("fileSec", METS_NS)
@@ -238,7 +250,7 @@ public class UpdateMetadataActionTests {
 		
 		assertEquals("Ye_old_duckroll.jpg", url);
 		
-		doc = builder.build(new FileReader(new File(basePath + "TEST/23/data/dip/institution/METS.xml")));
+		doc = builder.build(new FileReader(new File(workAreaPath + "/work/TEST/23/data/dip/institution/METS.xml")));
 
 		url = doc.getRootElement()
 				.getChild("fileSec", METS_NS)

@@ -22,15 +22,12 @@ package de.uzk.hki.da.cb;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-import static org.mockito.Matchers.anyObject;
 
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import org.hibernate.Session;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -43,6 +40,8 @@ import de.uzk.hki.da.model.Node;
 import de.uzk.hki.da.model.Object;
 import de.uzk.hki.da.model.Package;
 import de.uzk.hki.da.service.DistributedConversionHelper;
+import de.uzk.hki.da.utils.Path;
+import de.uzk.hki.da.utils.RelativePath;
 import de.uzk.hki.da.utils.TESTHelper;
 
 
@@ -76,7 +75,7 @@ public class ConvertActionNodeSplittingTests {
 	ScanAction convert = new ScanAction();
 	
 	/** The base path. */
-	String basePath="src/test/resources/cb/GenerateConversionInstructionsTests/";
+	Path basePath = new RelativePath("src/test/resources/cb/GenerateConversionInstructionsTests/");
 	
 	/** The o. */
 	Object o = TESTHelper.setUpObject("1177",basePath);
@@ -94,11 +93,10 @@ public class ConvertActionNodeSplittingTests {
 		
 		allNodes.add(localNode);
 		allNodes.add(friendNode);
-		when(dao.getAllNodes((Session)anyObject())).thenReturn(allNodes);
 		
 		job = new Job();
 		job.setId(1);
-		job.setInitial_node("vm1");
+		job.setResponsibleNodeName("vm1");
 		
 		convert.setLocalNode(localNode);
 		convert.setDao(dao);

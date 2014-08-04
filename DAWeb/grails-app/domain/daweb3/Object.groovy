@@ -27,6 +27,7 @@ import java.text.SimpleDateFormat;
 class Object {
 
     static constraints = {
+		dynamic_nondisclosure_limit nullable : true
     }
     
     static mapping = {
@@ -58,17 +59,23 @@ class Object {
 	String most_recent_secondary_attributes
 	Boolean ddb_exclusion
 	
+	
+	String getIdAsString() {
+		return id.toString();
+	}
 	/**
 	 * retrieves a status code based on the object_state
 	 * 0 means normal (grey)
 	 * 1 means error (red)
 	 * 2 means currently running (yellow)
+	 * https://github.com/da-nrw/DNSCore/blob/master/ContentBroker/src/main/markdown/object_model.md
 	 */
 	def getStatusCode() {
-		if (object_state<50) return 2
-		if (object_state==50) return 2
-		if (object_state==51) return 1
-		if (object_state==100) return 0
+
+		if ( object_state == 50 ) return 2
+		if ( object_state == 60 ) return 2
+		if ( object_state == 51 ) return 1
+		if (object_state == 100 ) return 0
 		return 1;
 	}
 	

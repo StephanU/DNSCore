@@ -27,8 +27,6 @@ import javax.mail.MessagingException;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang.NotImplementedException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import de.uzk.hki.da.core.UserException;
 import de.uzk.hki.da.core.UserException.UserExceptionId;
@@ -39,6 +37,7 @@ import de.uzk.hki.da.service.Mail;
 import de.uzk.hki.da.utils.ArchiveBuilder;
 import de.uzk.hki.da.utils.ArchiveBuilderFactory;
 import de.uzk.hki.da.utils.BagitUtils;
+import de.uzk.hki.da.utils.Path;
 
 
 /**
@@ -51,10 +50,8 @@ import de.uzk.hki.da.utils.BagitUtils;
 
 public class RetrievalAction extends AbstractAction {
 	
-	static final Logger logger = LoggerFactory.getLogger(RetrievalAction.class);
 	private String sidecarExtensions;
 	private DistributedConversionAdapter distributedConversionAdapter;
-	
 	
 	public RetrievalAction(){}
 	
@@ -64,10 +61,11 @@ public class RetrievalAction extends AbstractAction {
 		
 		ArchiveBuilder builder = ArchiveBuilderFactory.getArchiveBuilderForFile(new File(".tar"));
 
-		String tempFolder = localNode.getWorkAreaRootPath()+object.getContractor().getShort_name()+"/"+object.getIdentifier()+"/"+
-				object.getIdentifier()+"/";
+		String tempFolder = Path.make(localNode.getWorkAreaRootPath(),
+				object.getContractor().getShort_name(), object.getIdentifier(), object.getIdentifier()) + "/";
+		
 		new File(tempFolder).mkdir();
-		File premisFile = new File(object.getDataPath() + object.getNameOfNewestBRep() + "/premis.xml");
+		File premisFile = Path.makeFile(object.getDataPath(),object.getNameOfNewestBRep(),"/premis.xml");
 		
 		if (premisFile.exists())
 		{
@@ -82,15 +80,15 @@ public class RetrievalAction extends AbstractAction {
 		
 		copySurfaceRepresentation(object,tempFolder);
 		
-		// Bagit
 		logger.trace("Building BagIt");
 		BagitUtils.buildBagit(tempFolder);
 		
 		// Repacking
-		logger.debug("Building tar at " + localNode.getUserAreaRootPath() + object.getContractor().getShort_name() + "/outgoing/" + object.getIdentifier() + ".tar");
+		Path newTar = Path.make(localNode.getUserAreaRootPath(),object.getContractor().getShort_name(),"outgoing",object.getIdentifier() + ".tar");
+		logger.debug("Building tar at " + newTar);
 		try {
 			builder.archiveFolder(new File(tempFolder),
-								  new File(localNode.getUserAreaRootPath() + object.getContractor().getShort_name() + "/outgoing/" + object.getIdentifier() + ".tar"), true);
+								  newTar.toFile(), true);
 
 		} catch (Exception e) {
 			throw new UserException(UserExceptionId.RETRIEVAL_ERROR, "Tar couldn't be packed", e);
@@ -103,7 +101,7 @@ public class RetrievalAction extends AbstractAction {
 		}
 		
 		String relativePackagePath = object.getContractor().getShort_name() + "/" + object.getIdentifier() + "/";
-		File packageFolder = new File(localNode.getWorkAreaRootPath() + relativePackagePath);
+		File packageFolder = Path.makeFile(localNode.getWorkAreaRootPath(),relativePackagePath);
 		
 		try {
 			FileUtils.deleteDirectory(packageFolder);
@@ -111,7 +109,7 @@ public class RetrievalAction extends AbstractAction {
 			throw new UserException(UserExceptionId.RETRIEVAL_ERROR, "Couldn't delete folder " + packageFolder.getAbsolutePath(), e);
 		}
 		
-		distributedConversionAdapter.remove("fork/" + relativePackagePath.replaceAll("/$", "")); // replace all -> iRODS doesn't like trailing slashes
+		distributedConversionAdapter.remove("work/" + relativePackagePath.replaceAll("/$", "")); // replace all -> iRODS doesn't like trailing slashes
 		
 		emailReport(object.getContractor().getEmail_contact(),object.getIdentifier(),object.getContractor().getShort_name());
 		return true;
@@ -155,13 +153,13 @@ public class RetrievalAction extends AbstractAction {
 	
 	private void emailReport(String email,String objectIdentifier,String csn){
 		
-		String subject = "[" + getIrodsZonePath().replace("/", "") +  "] Retrieval Report für " + objectIdentifier;
-		String msg = "Ihr angefordertes Objekt mit dem Namen \""+ objectIdentifier + "\" wurde unter Ihrem Outgoing Ordner unter " + getIrodsZonePath() + "home/" 
+		String subject = "Retrieval Report für " + objectIdentifier;
+		String msg = "Ihr angefordertes Objekt mit dem Namen \""+ objectIdentifier + "\" wurde unter Ihrem Outgoing Ordner unter " 
 				+ csn + "/outgoing/ abgelegt und steht jetzt"
 				+ " zum Retrieval bereit!\n\n";
 		if (email != null) {
 			try {
-				Mail.sendAMail(email, subject, msg);
+				Mail.sendAMail(getSystemFromEmailAdress(),email, subject, msg);
 			} catch (MessagingException e) {
 				logger.error("Sending email retrieval reciept for " + objectIdentifier + "failed", e);
 			}
@@ -182,6 +180,7 @@ public class RetrievalAction extends AbstractAction {
 	public String getSidecarExtensions() {
 		return sidecarExtensions;
 	}
+
 
 	public DistributedConversionAdapter getDistributedConversionAdapter() {
 		return distributedConversionAdapter;

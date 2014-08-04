@@ -45,10 +45,11 @@ public class ATReadURNFromSIP extends Base {
 	}
 
 	/**
+	 * @throws IOException 
 	 * @throws java.lang.Exception
 	 */
 	@After
-	public void tearDown() throws Exception {
+	public void tearDown(){
 		clearDB();
 		cleanStorage();
 	}
@@ -57,7 +58,7 @@ public class ATReadURNFromSIP extends Base {
 	public void test() throws IOException, InterruptedException {
 		String originalName = "ATReadURNFromSIP";
 		FileUtils.copyFileToDirectory(new File("src/test/resources/at/"+originalName+".tgz"), 
-				new File(ingestAreaRootPath+"TEST"));
+				new File(localNode.getIngestAreaRootPath()+"/TEST"));
 		waitForJobsToFinish(originalName,500);
 		Object object = fetchObjectFromDB(originalName);
 		

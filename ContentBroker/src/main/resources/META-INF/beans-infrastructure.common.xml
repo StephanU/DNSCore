@@ -38,7 +38,8 @@
   	</util:map>
   	
   	<util:map id="updateMetadataXpathsForUrls">
-  		<entry key="METS" value="//mets:FLocat/@xlink:href"/>
+<!--   		<entry key="METS" value="//mets:FLocat/@xlink:href"/> -->
+		<entry key="METS" value="//mets:file"/> 
   		<entry key="EAD" value="//daoloc/@href"/>
   		<entry key="XMP" value="//rdf:Description/@rdf:about"/>
   		<entry key="LIDO" value="//lido:linkResource"/>
@@ -50,11 +51,6 @@
   		<value>HBZ</value>
   	</util:set>
   	
-  	<bean id="updateMetadataService" class="de.uzk.hki.da.service.UpdateMetadataService">
-		<property name="namespaces" ref="updateMetadataNamespaces" />
-		<property name="xpathsToUrls" ref="updateMetadataXpathsForUrls" />
-  	</bean>
-  	
   	<util:map id="viewerUrls">
   		<entry key="METS" value="http://dfg-viewer.de/show/?set[mets]="/>
   		<entry key="EAD" value="http://data.danrw.de/ead-viewer/#/browse?src="/>
@@ -64,51 +60,43 @@
           
     <bean id="ingestAreaScannerWorker" class="de.uzk.hki.da.core.IngestAreaScannerWorker" init-method="init">
         <property name="ingestAreaRootPath" value="${localNode.ingestAreaRootPath}" />
-        <property name="localNodeName" value="${irods.server}" />
+        <property name="localNodeId" value="${localNode.id}" />
         <property name="dao" ref="centralDao" />
         <property name="minAge" value="2000" />
         <property name="registerObjectService" ref="registerObjectService" />
     </bean>
     
     <bean id="integrityScannerWorker" class="de.uzk.hki.da.integrity.IntegrityScannerWorker">
-        <property name="localNodeName" value="${irods.server}" />
-        <property name="gridFacade" ref="${grid.implementation}" />
+        <property name="localNodeId" value="${localNode.id}" />
+        <property name="gridFacade" ref="${cb.implementation.grid}" />
         <property name="nodeAdminEmail" value="${localNode.admin_email}" />
+        <property name="minNodes" value="${system.min_repls}" />
         <property name="dao" ref="centralDao" />
-        <property name="systemName" value="${irods.zone}" />
-        <property name="minNodes" value="${cb.min_repls}" />
-    </bean>
-    
-    <bean id="userAreaScannerWorker" class="de.uzk.hki.da.core.UserAreaScannerWorker" init-method="init">
-        <property name="ingestAreaRootPath" value="${localNode.ingestAreaRootPath}" />
-        <property name="userAreaRootPath" value="${localNode.userAreaRootPath}" />
+        <property name="systemFromEmailAddress" value="${system.emailFrom}" />
     </bean>
     
    	<bean id="actionFactory" class="de.uzk.hki.da.core.ActionFactory">
         <property name="actionRegistry" ref="actionRegistry" />
         <property name="localNode" ref="localNode" />
-        <property name="adminEmail" value="${localNode.admin_email}" />
-        <property name="irodsZonePath" value="${irods.zone}" />
         <property name="dao" ref="centralDao" />
-        <property name="actionCommunicatorService" ref="actionCommunicatorService" />
+        <property name="systemFromEmailAddress" value="${system.emailFrom}" />
         <property name="userExceptionManager" ref="userExceptionManager" />
         <property name="mqConnectionFactory" ref="mqConnectionFactory"/>
     </bean>
     
    <bean id="registerObjectService" class="de.uzk.hki.da.service.RegisterObjectService" init-method="init">
   		<property name="dao" ref="centralDao" />
-  		<property name="nameSpace" value="urn:nbn:de:danrw" />
+  		<property name="nameSpace" value="${system.urnNameSpace}" />
 		<property name="localNode" ref="localNode" />
   	</bean>
   
-    <bean class="de.uzk.hki.da.convert.JhoveScanService" id="jhoveScanService" scope="prototype">
+    <bean class="de.uzk.hki.da.format.JhoveScanService" id="jhoveScanService" scope="prototype">
         <property name="jhoveFolder" value="jhove"/>
     </bean>
     
-    <bean class="de.uzk.hki.da.model.CentralDatabaseDAO" id="centralDao"/>
     
-    <bean class="de.uzk.hki.da.core.ActionCommunicatorService" id="actionCommunicatorService"/>
-	
+    <bean class="de.uzk.hki.da.service.MimeTypeDetectionService" id="mtds"/>
+    
 	<bean class="de.uzk.hki.da.service.UserExceptionManager" id="userExceptionManager" init-method="readConfigFile"/>
 	
 	<bean id="actionInformation" class="de.uzk.hki.da.core.ActionInformation" scope="prototype" init-method="init">

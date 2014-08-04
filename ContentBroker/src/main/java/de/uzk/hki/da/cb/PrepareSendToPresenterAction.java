@@ -30,6 +30,8 @@ import de.uzk.hki.da.grid.DistributedConversionAdapter;
 import de.uzk.hki.da.metadata.PremisXmlReader;
 import de.uzk.hki.da.model.Object;
 import de.uzk.hki.da.model.PublicationRight.Audience;
+import de.uzk.hki.da.utils.Path;
+import de.uzk.hki.da.utils.RelativePath;
 
 
 /**
@@ -49,8 +51,8 @@ public class PrepareSendToPresenterAction extends AbstractAction {
 		if (distributedConversionAdapter==null) throw new ConfigurationException("distributedConversionAdapter not set");
 		
 		String dipName = object.getContractor().getShort_name() + "/" + object.getIdentifier()+"_"+object.getLatestPackage().getId();
-		publicDir = new File(localNode.getDipAreaRootPath()+"public/"+dipName);
-		instDir = new File(localNode.getDipAreaRootPath()+"institution/"+dipName);
+		publicDir = Path.makeFile(localNode.getWorkAreaRootPath(),"pips","public",dipName);
+		instDir = Path.makeFile(localNode.getWorkAreaRootPath(),"pips","institution",dipName);
 		
 		logger.trace("Moving the dip content for presentation purposes out of the archival package.");
 		copyPIPSforReplication();
@@ -77,18 +79,15 @@ public class PrepareSendToPresenterAction extends AbstractAction {
 
 
 	/**
-	 * @return
-	 * @throws IOException
+	 * @author Daniel M. de Oliveira
 	 */
 	private Object readRightsFromPREMIS() throws IOException {
 		Object premisObject = null;
 		try {
-			PremisXmlReader reader = new PremisXmlReader();
 
-			File premisFile = new File(object.getDataPath() +
-					object.getNameOfNewestBRep() + "/premis.xml");
+			premisObject = new PremisXmlReader().deserialize(Path.makeFile(object.getDataPath(),
+					object.getNameOfNewestBRep(),"premis.xml"));
 			
-			premisObject = reader.deserialize(premisFile);
 		} catch (ParseException pe){
 			throw new RuntimeException("error while parsing PREMIS-file",pe);
 		}
@@ -102,18 +101,18 @@ public class PrepareSendToPresenterAction extends AbstractAction {
 	private void registerPIPSforReplication(String dipName) {
 		
 		if (!publicDir.exists())
-			distributedConversionAdapter.create("dip/public/"+dipName);
+			distributedConversionAdapter.create(new RelativePath("pips","public",dipName).toString());
 		else
-			distributedConversionAdapter.register(
-				"dip/public/"+dipName, 
+			distributedConversionAdapter.register(new RelativePath
+				("pips","public",dipName).toString(),
 				publicDir.getAbsolutePath()
 				);
 		
 		if (!instDir.exists())
-			distributedConversionAdapter.create("dip/institution/"+dipName);
+			distributedConversionAdapter.create(new RelativePath("pips","institution",dipName).toString());
 		else
-			distributedConversionAdapter.register(
-				"dip/institution/"+dipName, 
+			distributedConversionAdapter.register(new RelativePath(
+				"pips","institution",dipName).toString(),
 				instDir.getAbsolutePath()
 				);
 	}
@@ -125,26 +124,26 @@ public class PrepareSendToPresenterAction extends AbstractAction {
 	 * get into the archive we extract the derivate before we build a tar file around the xIP.
 	 * 
 	 * Moves 
-	 * <li>from fork/[csn]/[oid]/data/dip/public -> dip/public/[csn]/[oid]
-	 * <li>from fork/[csn]/[oid]/data/dip/institution -> dip/institution/[csn]/[oid]
+	 * <li>from work/[csn]/[oid]/data/dip/public -> dip/public/[csn]/[oid]
+	 * <li>from work/[csn]/[oid]/data/dip/institution -> dip/institution/[csn]/[oid]
 	 * 
 	 * @param dipName has the form urn_pkgid
 	 * @throws IOException 
 	 */
 	private void copyPIPSforReplication() throws IOException {
-		
-		if (new File(object.getDataPath()+"dip/public").exists()){
+
+		if (Path.makeFile(object.getDataPath(),"dip","public").exists()){
 			logger.info("Copying public datastreams to " + publicDir.getAbsolutePath());
 			if (publicDir.exists()) FileUtils.deleteDirectory(publicDir);
 			FileUtils.copyDirectory(
-					new File(object.getDataPath()+"dip/public"), 
+					Path.make(object.getDataPath(),"dip","public").toFile(), 
 					publicDir);
 		}
-		if (new File(object.getDataPath()+"dip/institution").exists()){
+		if (Path.makeFile(object.getDataPath(),"dip","institution").exists()){
 			logger.info("Copying institution datastreams to " + instDir);
 			if (instDir.exists()) FileUtils.deleteDirectory(instDir);
 			FileUtils.copyDirectory(
-					new File(object.getDataPath()+"dip/institution"), 
+					Path.make(object.getDataPath(),"dip","institution").toFile(), 
 					instDir);
 		}
 	}

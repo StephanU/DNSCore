@@ -7,61 +7,15 @@
 #### PARAMS #####
 ################# 
 
-REPO=../installation/
+REPO=target/installation/
 VERSION=`cat ../VERSION.txt`
-
+SOURCE_PATH=`pwd`
 LANG="de_DE.UTF-8"
 export LANG
 
-#############################
-#### CREATE DELIVERABLE #####
-############################# 
-
-echo Setting up and collecting environment specific configuration.
-
-# $1 = INSTALL_PATH
-function prepareTestEnvironment(){
-	echo Prepare test environment for acceptance testing.
-	cp $1/conf/config.properties conf/
-	cp $1/conf/hibernateCentralDB.cfg.xml conf/
-}
-function createIrodsDirs(){
-	imkdir /da-nrw/fork/TEST              2>/dev/null
-	imkdir /da-nrw/aip/TEST               2>/dev/null
-	imkdir /da-nrw/dip/institution/TEST   2>/dev/null
-	imkdir /da-nrw/dip/public/TEST        2>/dev/null
-}
-
-
-# $1 = INSTALL_PATH
-function restartContentBroker(){
-	SOURCE_PATH=`pwd`
-	cd $1
-	echo -e "\nTrying to start ContentBroker "
-	kill -9 `ps -aef | grep ContentBroker.jar | grep -v grep | awk '{print $2}'` 2>/dev/null
-	rm -f /tmp/cb.running
-	./ContentBroker_start.sh
-	sleep 15
-   cd $SOURCE_PATH
-}
-
-# $1 = INSTALL_PATH
-function install(){
-	cd ../installation 
-	echo call ./install.sh $1
-	./install.sh $1 "full.test"
-	if [ $? = 1 ]
-	then
-		echo Error in install script
-		exit
-	fi
-	cd ../ContentBroker;
-}
-
-
-case "$1" in
-dev)
-	if [ $# -ne 2 ] 
+if [ "$1" = "dev" ]
+then
+		if [ $# -ne 2 ] 
 	then
 		echo you chose a development environment as target environment. call
 		echo "./install.sh dev <contentBrokerInstallationRootPath>"
@@ -80,34 +34,111 @@ dev)
 		echo Error target environment $INSTALL_PATH and current src tree are identical!
 		exit
 	fi
+else 
+	INSTALL_PATH=/ci/ContentBroker
+fi
 
-	rm $INSTALL_PATH/conf/config.properties
-	rm $INSTALL_PATH/conf/hibernateCentralDB.cfg.xml
-	install $INSTALL_PATH
+#############################
+######## FUNCTIONS ##########
+############################# 
+
+function createIrodsDirs(){
+	imkdir /c-i/aip/TEST                2>/dev/null
+	imkdir /c-i/pips/institution/TEST   2>/dev/null
+	imkdir /c-i/pips/public/TEST        2>/dev/null
+}
+
+# $1 = INSTALL_PATH
+#function stopContentBroker(){
+#	cd $1
+	#echo -e "\nTrying to start ContentBroker "
+	#kill -9 `ps -aef | grep ContentBroker.jar | grep -v grep | awk '{print $2}'` 2>/dev/null
+	#rm -f /tmp/cb.running
+#	./ContentBroker_stop.sh.template
+#    cd $SOURCE_PATH
+#}
+
+# $1 = INSTALL_PATH
+function startContentBroker(){
+	cd $1
 	
-	src/main/bash/populatetestdb.sh create
-	src/main/bash/populatetestdb.sh populate
+	./ContentBroker_start.sh.template
+	sleep 15
+	cd $SOURCE_PATH
+}
+
+# $1 = INSTALL_PATH
+# $2 = mode
+function install(){
+	cd $REPO
+	echo call ./install.sh $1 $2
+	./install.sh $1 $2
+	if [ $? = 1 ]
+	then
+		echo Error in install script
+		exit
+	fi
+	cd $SOURCE_PATH
+}
+
+function launchXDB(){
+	DATABASE_PROC_ID=`ps -aef | grep hsqldb.jar | grep -v grep | awk '{print $2}'`
+	if [ "$DATABASE_PROC_ID" != "" ]
+	then
+	        echo Killing hsql database process $DATABASE_PROC_ID.
+	        kill -9 $DATABASE_PROC_ID
+	fi
 	
-	prepareTestEnvironment $INSTALL_PATH
-	restartContentBroker $INSTALL_PATH
+	sleep 2
+	
+	echo Recreating da-nrw schema in hsql database.
+	rm -r mydb.tmp 2> /dev/null
+	rm mydb.*      2> /dev/null
+	
+	cd $HIER
+	java -cp ../3rdParty/hsqldb/lib/hsqldb.jar org.hsqldb.server.Server --database.0 file:mydb --dbname.0 xdb &
+	
+	sleep 2
+}
+
+
+
+
+#############################
+######## MAIN ###############
+############################# 
+
+src/main/bash/ContentBroker_stop.sh
+
+case "$1" in
+dev)
+	launchXDB
+	BEANS=full.dev
 ;;
-vm3)
-	export PGPASSWORD="kulle_oezil06"
-	psql contentbroker -c "delete from queue;"
-	psql contentbroker -c "delete from objects;"
-	psql contentbroker -c "delete from packages;"
-	psql contentbroker -c "delete from objects_packages;"
-
-	INSTALL_PATH=/data/danrw/ContentBroker
-
-	rm $INSTALL_PATH/conf/config.properties
-	rm $INSTALL_PATH/conf/hibernateCentralDB.cfg.xml
-	install $INSTALL_PATH
-
+ci)
 	createIrodsDirs
-	prepareTestEnvironment $INSTALL_PATH
-	restartContentBroker $INSTALL_PATH
+	BEANS=full
 ;;
 esac
 
+mkdir conf
+cp src/main/xml/hibernateCentralDB.cfg.xml.$1 conf/hibernateCentralDB.cfg.xml
+cp src/main/xml/beans.xml.acceptance-test.$1 conf/beans.xml
+cp src/main/conf/config.properties.$1 conf/config.properties
+
+java -jar target/ContentBroker-SNAPSHOT.jar createSchema
+src/main/bash/populatetestdb.sh populate $1
+
+rm $INSTALL_PATH/conf/beans.xml
+rm $INSTALL_PATH/conf/config.properties
+rm $INSTALL_PATH/conf/hibernateCentralDB.cfg.xml
+rm $INSTALL_PATH/actionCommunicatorService.recovery
+
+install $INSTALL_PATH $BEANS
+# TODO 1. really needed on a ci machine? 2. duplication with installer?
+cp src/main/bash/ffmpeg.sh.fake $INSTALL_PATH/ffmpeg.sh
+
+cp $INSTALL_PATH/conf/config.properties conf/
+
+startContentBroker $INSTALL_PATH
 

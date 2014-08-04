@@ -27,11 +27,9 @@ import java.util.List;
 import java.util.Set;
 
 import org.apache.commons.lang.NotImplementedException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-import de.uzk.hki.da.convert.FormatScanService;
-import de.uzk.hki.da.convert.JhoveScanService;
+import de.uzk.hki.da.format.FormatScanService;
+import de.uzk.hki.da.format.JhoveScanService;
 import de.uzk.hki.da.model.DAFile;
 import de.uzk.hki.da.model.Package;
 import de.uzk.hki.da.utils.CommaSeparatedList;
@@ -41,8 +39,6 @@ import de.uzk.hki.da.utils.CommaSeparatedList;
  */
 public class CheckFormatsAction extends AbstractAction {
 
-	static final Logger logger = LoggerFactory
-			.getLogger(CheckFormatsAction.class);
 
 	private String sidecarExtensions;
 
@@ -109,7 +105,7 @@ public class CheckFormatsAction extends AbstractAction {
 	 */
 	private void attachJhoveInfoToAllFiles(List<DAFile> files) throws IOException {
 		for (DAFile f : files) {
-			String jhoveOut = jhoveScanService.extract(f, job.getId());
+			String jhoveOut = jhoveScanService.extract(f.toRegularFile(), job.getId());
 
 			f.setPathToJhoveOutput(jhoveOut);
 			logger.debug("Path to jhove output for file \""+f+"\": " + jhoveOut);

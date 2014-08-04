@@ -23,8 +23,6 @@ import java.io.File;
 import java.util.Date;
 
 import org.apache.commons.lang.NotImplementedException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * 
@@ -36,8 +34,6 @@ import org.slf4j.LoggerFactory;
 
 public class PostRetrievalAction extends AbstractAction {
 
-	static final Logger logger = LoggerFactory.getLogger(PostRetrievalAction.class);
-	
 	@Override
 	boolean implementation() {
 		setKILLATEXIT(true);
@@ -45,7 +41,7 @@ public class PostRetrievalAction extends AbstractAction {
 		String csn=object.getContractor().getShort_name();
 		String mergeTarName = object.getIdentifier() + ".tar";
 		
-		String transferAreaRootPath = localNode.getUserAreaRootPath();
+		String transferAreaRootPath = localNode.getUserAreaRootPath().toString();
 		
 		if (new Date().getTime()/1000L > (Long.parseLong(job.getDate_created())+(3600L*24))){
 			

@@ -18,7 +18,6 @@
 */
 package de.uzk.hki.da.cb;
 
-import java.io.File;
 import java.io.IOException;
 
 import org.apache.commons.lang.NotImplementedException;
@@ -31,6 +30,7 @@ import de.uzk.hki.da.service.RetrievePackagesHelper;
 /**
  * @author Daniel M. de Oliveira
  */
+
 public class ObjectToWorkAreaAction extends AbstractAction {
 
 	private IngestGate ingestGate;
@@ -41,13 +41,13 @@ public class ObjectToWorkAreaAction extends AbstractAction {
 	@Override
 	boolean implementation() {
 		
-		new File(object.getDataPath()).mkdirs();
+		object.getDataPath().toFile().mkdirs();
 		
 		RetrievePackagesHelper retrievePackagesHelper = new RetrievePackagesHelper(getGridFacade());
 		
 		try {
 			if (!ingestGate.canHandle(retrievePackagesHelper.getObjectSize(object, job))) {
-				logger.info("no disk space available at working resource. will not fetch new data.");
+				logger.warn("ResourceMonitor prevents further processing of package due to space limitations. Setting job back to start state.");
 				return false;
 			}
 		} catch (IOException e) {
@@ -60,8 +60,8 @@ public class ObjectToWorkAreaAction extends AbstractAction {
 			throw new RuntimeException("error while trying to get existing packages from lza area",e);
 		}
 		
-		distributedConversionAdapter.register("fork/"+object.getContractor().getShort_name()+"/"+object.getIdentifier(),
-				object.getPath());
+		distributedConversionAdapter.register("work/"+object.getContractor().getShort_name()+"/"+object.getIdentifier(),
+				object.getPath().toString());
 		return true;
 	}
 

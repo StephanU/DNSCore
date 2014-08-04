@@ -21,9 +21,10 @@ package de.uzk.hki.da.at;
 import static org.junit.Assert.fail;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
 import java.util.Properties;
 
 import org.apache.commons.io.FileUtils;
@@ -35,51 +36,58 @@ import de.uzk.hki.da.core.HibernateUtil;
 import de.uzk.hki.da.grid.DistributedConversionAdapter;
 import de.uzk.hki.da.grid.GridFacade;
 import de.uzk.hki.da.model.CentralDatabaseDAO;
+import de.uzk.hki.da.model.Contractor;
 import de.uzk.hki.da.model.Job;
 import de.uzk.hki.da.model.Node;
 import de.uzk.hki.da.model.Object;
+import de.uzk.hki.da.model.Package;
 import de.uzk.hki.da.model.StoragePolicy;
 import de.uzk.hki.da.repository.RepositoryFacade;
+import de.uzk.hki.da.utils.C;
 import de.uzk.hki.da.utils.NativeJavaTarArchiveBuilder;
+import de.uzk.hki.da.utils.Path;
+import de.uzk.hki.da.utils.RelativePath;
+import de.uzk.hki.da.utils.TC;
 import de.uzk.hki.da.utils.Utilities;
 
 public class Base {
 
-	protected String testDataRootPath="src/test/resources/at/";
-	protected String ingestAreaRootPath;
-	protected String workAreaRootPath;
-	protected String gridCacheAreaRootPath;
-	protected String userAreaRootPath;
-	protected String dipAreaRootPath;
+	private static final int wait_interval=2000; // in ms
+	
+	protected Path testDataRootPath = new RelativePath("src/test/resources/at/");
+	protected Node localNode;
 	protected GridFacade gridFacade;
 	protected RepositoryFacade repositoryFacade;
 	protected DistributedConversionAdapter distributedConversionAdapter;
-	protected String nodeName;
 	protected CentralDatabaseDAO dao = new CentralDatabaseDAO();
+	protected Contractor testContractor;
+
 	
 	protected void setUpBase() throws IOException{
 		
-		Properties properties = null;
-		InputStream in;
-		in = new FileInputStream("conf/config.properties");
-		properties = new Properties();
-		properties.load(in);
+		Properties properties = Utilities.read(new File("conf/config.properties"));
 
-		ingestAreaRootPath = Utilities.slashize((String) properties.get("localNode.ingestAreaRootPath"));
-		workAreaRootPath = Utilities.slashize((String) properties.get("localNode.workAreaRootPath"));
-		gridCacheAreaRootPath = Utilities.slashize((String) properties.get("localNode.gridCacheAreRootPath"));
-		userAreaRootPath = Utilities.slashize((String) properties.get("localNode.userAreaRootPath"));
-		dipAreaRootPath = Utilities.slashize((String) properties.get("localNode.dipAreaRootPath"));
-		nodeName = (String) properties.get("irods.server");
-		System.out.println(ingestAreaRootPath);
-	
 		HibernateUtil.init("conf/hibernateCentralDB.cfg.xml");
+	
+		instantiateNode();
+		if (localNode==null) throw new IllegalStateException("localNode could not be instantiated");
+
+		System.out.println("localnode: "+localNode.getName());
+
 		
-		instantiateGrid(properties.getProperty("grid.implementation"),properties.getProperty("implementation.distributedConversion"));
+		instantiateGrid(
+				properties.getProperty("cb.implementation.grid"),
+				properties.getProperty("cb.implementation.distributedConversion"));
 		if (gridFacade==null) throw new IllegalStateException("gridFacade could not be instantiated");
 		
-		instantiateRepository(properties.getProperty("repository.implementation"));
+		instantiateRepository(properties.getProperty("cb.implementation.repository"));
 		if (repositoryFacade==null) throw new IllegalStateException("repositoryFacade could not be instantiated");
+
+		CentralDatabaseDAO centralDB = new CentralDatabaseDAO();
+		Session session = HibernateUtil.openSession();
+		session.beginTransaction();
+		testContractor = centralDB.getContractor(session, "TEST");
+		session.close();
 	}
 	
 	/**
@@ -87,20 +95,70 @@ public class Base {
 	 * @param dcaImplBeanName distributed conversion adapter beanName
 	 * @return
 	 */
+	
 	private void instantiateGrid(String gridImplBeanName,String dcaImplBeanName) {
-		
 		AbstractApplicationContext context =
-				new FileSystemXmlApplicationContext("src/main/resources/META-INF/beans-infrastructure.core.xml");
+				new FileSystemXmlApplicationContext("conf/beans.xml");
 		gridFacade = (GridFacade) context.getBean(gridImplBeanName);
 		distributedConversionAdapter = (DistributedConversionAdapter) context.getBean(dcaImplBeanName);
 		context.close();
 	}
 	
+	private void instantiateNode() {
+		AbstractApplicationContext context = 
+				new FileSystemXmlApplicationContext("conf/beans.xml");
+		localNode = (Node) context.getBean("localNode");
+		
+		Session session = HibernateUtil.openSession();
+		session.beginTransaction();
+		session.refresh(localNode);
+		session.close();
+		
+		context.close();
+	}
+	
 	private void instantiateRepository(String repImplBeanName) {
 		AbstractApplicationContext context =
-				new FileSystemXmlApplicationContext("src/main/resources/META-INF/beans-infrastructure.core.xml");
+				new FileSystemXmlApplicationContext("conf/beans.xml");
 		repositoryFacade = (RepositoryFacade) context.getBean(repImplBeanName);
 		context.close();
+	}
+	
+	
+	
+	/**
+	 * Checking the database in regular intervals for a job in an error state ending with errorStatusLastDigit.
+	 * 
+	 * @param originalName
+	 * @param errorStatusLastDigit
+	 * @param timeout wait timeout ms until you consider the test failed.
+	 * @return job if found job in error state
+	 * @throws RuntimeException to signal the test considered failed.
+	 * 
+	 * @author Daniel M. de Oliveira
+	 */
+	protected Job waitForJobToBeInErrorStatus(String originalName,String errorStatusLastDigit,int timeout) throws InterruptedException{
+		
+		int waited_ms_total=0;
+		while (true){
+			if (waited_ms_total>timeout) throw new RuntimeException("waited to long. test considered failed");
+			
+			Session session = HibernateUtil.openSession();
+			session.beginTransaction();
+			Job job = dao.getJob(session, originalName, C.TEST_USER_SHORT_NAME);
+			session.close();
+			
+			if (job==null) continue;
+			
+			Thread.sleep(wait_interval);
+			waited_ms_total+=wait_interval;
+
+			System.out.println("waiting for job to be ready ... "+job.getStatus());
+			if (job.getStatus().endsWith(errorStatusLastDigit)){
+				System.out.println("ready");
+				return job;
+			}
+		}
 	}
 	
 	
@@ -132,7 +190,7 @@ public class Base {
 		}
 	}
 	
-	protected void waitForJobsToFinish(String originalName, int timeout) throws InterruptedException{
+	protected void waitForJobsToFinish(String originalName, int timeout){
 
 		// wait for job to appear
 		Job job = null;
@@ -149,8 +207,9 @@ public class Base {
 			job = dao.getJob(session, originalName, "TEST");
 			session.close();
 			
-			Thread.sleep(timeout);
-			
+			try {
+				Thread.sleep(timeout);
+			} catch (InterruptedException e) {} // no problem
 		}
 		
 		// wait for jobs to disappear
@@ -167,14 +226,17 @@ public class Base {
 				return;
 			} else if (job.getStatus().endsWith("1") || job.getStatus().endsWith("3")
 					|| job.getStatus().endsWith("4")) {
-				String msg = "ERROR: Job in error state: " + job.getStatus();
+				String oid=job.getObject().getIdentifier();
+				String msg = "ERROR: Job in error state: " + job.getStatus() + " in Object-Id "+ oid;
 				System.out.println(msg);
 				throw new RuntimeException(msg);
 			}
 			
 			System.out.println("waiting for jobs to finish ... "+job.getStatus());
 			
-			Thread.sleep(timeout);
+			try {
+				Thread.sleep(timeout);
+			} catch (InterruptedException e) {} // no problem
 		}
 	}
 	
@@ -195,7 +257,7 @@ public class Base {
 	 * @return physical path to unpacked object
 	 * @throws Exception 
 	 */
-	protected Object retrievePackage(String originalName,String packageName) throws Exception{
+	protected Object retrievePackage(String originalName,String packageName){
 		
 		Object object=fetchObjectFromDB(originalName);
 		
@@ -203,13 +265,18 @@ public class Base {
 		
 		try {
 			gridFacade.get(new File("/tmp/"+object.getIdentifier()+".pack_"+packageName+".tar"), 
-					"/aip/TEST/"+object.getIdentifier()+"/"+object.getIdentifier()+".pack_"+packageName+".tar");
+					"TEST/"+object.getIdentifier()+"/"+object.getIdentifier()+".pack_"+packageName+".tar");
 		} catch (IOException e) {
 			fail("could not fetch object from grid");
 		}
 		
 		NativeJavaTarArchiveBuilder tar = new NativeJavaTarArchiveBuilder();
-		tar.unarchiveFolder(new File("/tmp/"+object.getIdentifier()+".pack_"+packageName+".tar"), new File("/tmp/"));
+		
+		try {
+			tar.unarchiveFolder(new File("/tmp/"+object.getIdentifier()+".pack_"+packageName+".tar"), new File("/tmp/"));
+		} catch (Exception e) {
+			fail("could not find source file or unarchive source file to tmp");
+		}
 		
 		return object;
 	}
@@ -218,78 +285,194 @@ public class Base {
 		Session session = HibernateUtil.openSession();
 		session.beginTransaction();
 		session.createSQLQuery("DELETE FROM queue").executeUpdate();
+		session.createSQLQuery("DELETE FROM events").executeUpdate();
+		session.createSQLQuery("DELETE FROM dafiles").executeUpdate();
 		session.createSQLQuery("DELETE FROM objects_packages").executeUpdate();
 		session.createSQLQuery("DELETE FROM packages").executeUpdate();
 		session.createSQLQuery("DELETE FROM objects").executeUpdate();
+		session.createSQLQuery("DELETE FROM conversion_queue").executeUpdate();
+		
 		session.getTransaction().commit();
 		session.close();
 	}
 	
-	protected void cleanStorage() throws IOException{
-		FileUtils.deleteDirectory(new File(workAreaRootPath+"TEST"));
-		FileUtils.deleteDirectory(new File(ingestAreaRootPath+"TEST"));
-		FileUtils.deleteDirectory(new File(gridCacheAreaRootPath+"aip/TEST"));
-		FileUtils.deleteDirectory(new File(dipAreaRootPath+"institution/TEST"));
-		FileUtils.deleteDirectory(new File(dipAreaRootPath+"public/TEST"));
-		FileUtils.deleteDirectory(new File(userAreaRootPath+"TEST/outgoing"));
+
+	protected void cleanStorage(){
+		FileUtils.deleteQuietly(Path.make(localNode.getWorkAreaRootPath(),"/work/TEST").toFile());
+		FileUtils.deleteQuietly(Path.make(localNode.getIngestAreaRootPath(),"/TEST").toFile());
+		FileUtils.deleteQuietly(Path.makeFile(localNode.getGridCacheAreaRootPath(),C.AIP,C.TEST_USER_SHORT_NAME));
+		FileUtils.deleteQuietly(Path.make(localNode.getWorkAreaRootPath(),"/pips/institution/TEST").toFile());
+		FileUtils.deleteQuietly(Path.make(localNode.getWorkAreaRootPath(),"/pips/public/TEST").toFile());
+		FileUtils.deleteQuietly(Path.make(localNode.getUserAreaRootPath(),"/TEST/outgoing").toFile());
 		
-		distributedConversionAdapter.remove("fork/TEST");
+		distributedConversionAdapter.remove("work/TEST");
 		distributedConversionAdapter.remove("aip/TEST");
-		distributedConversionAdapter.remove("dip/institution/TEST");
-		distributedConversionAdapter.remove("dip/public/TEST");
+		distributedConversionAdapter.remove("pips/institution/TEST");
+		distributedConversionAdapter.remove("pips/public/TEST");
 		
-		distributedConversionAdapter.create("fork/TEST");
+		distributedConversionAdapter.create("work/TEST");
 		distributedConversionAdapter.create("aip/TEST");
-		distributedConversionAdapter.create("dip/institution/TEST");
-		distributedConversionAdapter.create("dip/public/TEST");
+		distributedConversionAdapter.create("pips/institution/TEST");
+		distributedConversionAdapter.create("pips/public/TEST");
 		
-		new File(userAreaRootPath+"TEST/outgoing").mkdirs();
-		new File(gridCacheAreaRootPath+"aip/TEST").mkdirs();
-		new File(ingestAreaRootPath+"TEST").mkdirs();
-		new File(workAreaRootPath+"TEST").mkdirs();
-		new File(dipAreaRootPath+"public/TEST").mkdirs();
-		new File(dipAreaRootPath+"institution/TEST").mkdirs();
+		Path.make(localNode.getUserAreaRootPath(),"/TEST/outgoing").toFile().mkdirs();
+		Path.makeFile(localNode.getGridCacheAreaRootPath(),"aip",C.TEST_USER_SHORT_NAME).mkdirs();
+		Path.make(localNode.getIngestAreaRootPath(),"/TEST").toFile().mkdirs();
+		Path.make(localNode.getWorkAreaRootPath(),"/work/TEST").toFile().mkdirs();
+		Path.make(localNode.getWorkAreaRootPath(),"/pips/public/TEST").toFile().mkdirs();
+		Path.make(localNode.getWorkAreaRootPath(),"/pips/institution/TEST").toFile().mkdirs();
+	}
+	
+
+	protected void createObjectAndJob(String name,String status) throws IOException{
+		createObjectAndJob(name,status,null,null);
+	}
+	
+	/**
+	 * @author Daniel M. de Oliveira
+	 * @throws IOException 
+	 */
+	protected Object putPackageToStorage(String identifier,String originalName,String containerName, Date createddate, int object_state) throws IOException{
+		if (createddate==null) createddate = new Date();
+		String urn =   "urn:nbn:de:danrw:"+identifier;
+		int timeout = 2000;
+		StoragePolicy sp = new StoragePolicy(localNode);
+		ArrayList<String> destinations = new ArrayList<String>();
+		destinations.add("ciArchiveResourceGroup");
+		sp.setDestinations(destinations);
+		sp.setMinNodes(1);
+		
+		gridFacade.put(Path.makeFile(TC.TEST_ROOT_AT,identifier+".pack_1.tar"), 
+				new RelativePath(C.TEST_USER_SHORT_NAME,identifier,identifier+".pack_1.tar").toString(), sp);
+		int i = 0;
+		while (!gridFacade.storagePolicyAchieved(new RelativePath(C.TEST_USER_SHORT_NAME,identifier,identifier+".pack_1.tar").toString(), sp)) {
+			try {
+				Thread.sleep(timeout);
+			} catch (InterruptedException e) {} // no problem
+			if (i>200) fail("Package was not replicated to archive resc");
+		}
+		Object object = new Object();
+		object.setContractor(testContractor);
+		object.setInitial_node("localnode");
+		object.setIdentifier(identifier);
+		object.setObject_state(object_state);
+		object.setUrn(urn);
+		object.setDate_created(String.valueOf(createddate.getTime()));
+		object.setDate_modified(String.valueOf(createddate.getTime()));
+		object.setLast_checked(createddate);
+		object.setOrig_name(originalName);
+		Package pkg = new Package();
+		pkg.setName("1");
+		pkg.setContainerName(containerName);
+		object.getPackages().add(pkg);
+		
+		Session session = HibernateUtil.openSession();
+		session.beginTransaction();
+		session.save(object);
+		session.getTransaction().commit();
+		session.close();
+		
+		return object;
 	}
 	
 
 	/**
+	 * @author jpeters
 	 * @throws IOException 
 	 */
-	protected void createObjectAndJob(String name, String status) throws IOException{
+	protected Object putPackageToStorage(String identifier,String originalName,String containerName) throws IOException{
+		 return putPackageToStorage(identifier,originalName,containerName ,null,0);
+	}
+	
+	
+	/**
+	 * @throws IOException 
+	 */
+	protected void createObjectAndJob(String name, String status,String packageType,String metadataFile) throws IOException{
 		gridFacade.put(
 				new File("src/test/resources/at/"+name+".pack_1.tar"),
-				"/aip/TEST/ID-"+name+"/ID-"+name+".pack_1.tar",new StoragePolicy(new Node()));
+				"TEST/ID-"+name+"/ID-"+name+".pack_1.tar",new StoragePolicy(new Node()));
+		
 		
 		Session session = HibernateUtil.openSession();
 		session.beginTransaction();
-		Integer dbid = (Integer) session.createSQLQuery("SELECT MAX(data_pk) FROM objects").uniqueResult(); 
-		if (dbid==null) dbid = 0;
-		dbid++;
-		System.out.println("CREATED Object with id " + dbid);
-		session.createSQLQuery("INSERT INTO objects (data_pk,urn,identifier,orig_name,contractor_id,object_state,published_flag,ddb_exclusion) "
-				+"VALUES (" + dbid + ",'urn:nbn:de:danrw-test-" + dbid + "','ID-"+name+"','"+name+"',1,'100',0,false);").executeUpdate();
-		Integer pkid = (Integer) session.createSQLQuery("SELECT MAX(id) FROM packages").uniqueResult(); 
-		if (pkid==null) pkid = 0;
-		pkid++;
-		session.createSQLQuery("INSERT INTO packages (id,name) VALUES ("+pkid+",'1');").executeUpdate();
-		session.createSQLQuery("INSERT INTO objects_packages (objects_data_pk,packages_id) VALUES ("+dbid+","+pkid+");").executeUpdate();
 		
-		session.createSQLQuery("INSERT INTO queue (id,status,objects_id,initial_node) VALUES ("+dbid+",'"+status+"',"+dbid+","+
-				"'"+nodeName+"');").executeUpdate();
+		Object object = new Object();
+		object.setUrn("");
+		object.setIdentifier("ID-"+name);
+		object.setOrig_name(name);
+		
+		object.setContractor(testContractor);
+		object.setMetadata_file(metadataFile);
+		object.setPackage_type(packageType);
+		object.setObject_state(100);
+		object.setPublished_flag(0);
+		object.setDdbExclusion(false);
+		session.save(object);
+
+		int data_pk = object.getData_pk();
+		System.out.println("CREATED Object with id " + data_pk);
+		String data_pk_string = String.valueOf(data_pk);
+		object.setUrn("urn:nbn:de:danrw-test-"+data_pk_string);
+		session.saveOrUpdate(object);
+		
+		
+		Package currentPackage = new Package();
+		currentPackage.setName("1");
+		currentPackage.setContainerName(name);
+		List<Package> packages = new ArrayList<Package>();
+		packages.add(currentPackage);
+		object.setPackages(packages);		
+		session.saveOrUpdate(object);
+		
+		Job job = new Job();
+		job.setStatus(status);
+		Node node = (Node)session.load(Node.class, localNode .getId());
+		job.setResponsibleNodeName(node.getName());
+		job.setObject(object);
+		session.save(job);
 		
 		session.getTransaction().commit();
-		session.close();	
+		session.close();
 	}
-
-	protected Object ingest(String originalName) throws IOException,
-			InterruptedException {
-				FileUtils.copyFileToDirectory(new File(testDataRootPath+originalName+".tgz"), 
-						new File(ingestAreaRootPath+"TEST"));
-				waitForJobsToFinish(originalName,500);
-				
-				Object object = fetchObjectFromDB(originalName);
-				return object;
-			}
 	
-	
+	/**
+	 * Puts the file with named originalName into the contractor TEST's
+	 * subfolder of the ingest area of the running ContentBroker. Waits until 
+	 * the file has been ingested.
+	 * 
+	 * For the source file will be searched for in testDataRootPath.
+	 * 
+	 * @author Daniel M. de Oliveira
+	 * @param originalName just the basename of the file. the extension default to tgz. if you want to explicitely change that use 
+	 * ingest(String,String).
+	 * @return the database entry for the object of the ingested package.
+	 */
+	protected Object ingest(String originalName){
+		
+		return ingest(originalName,"tgz");
+	}
+			
+	/**
+	 * @see Base#ingest(String)
+	 * 
+	 * @author Daniel M. de Oliveira
+	 * @param originalName
+	 * @param containerSuffix
+	 * @return
+	 */
+	protected Object ingest(String originalName,String containerSuffix){
+		
+		try {
+			System.out.println("copy "+Path.makeFile( testDataRootPath, originalName+"."+containerSuffix )+" to "+Path.makeFile(localNode.getIngestAreaRootPath(),"TEST"));
+			FileUtils.copyFileToDirectory( Path.makeFile( testDataRootPath, originalName+"."+containerSuffix ), 
+					Path.makeFile(localNode.getIngestAreaRootPath(),"TEST"));
+		} catch (IOException e) {
+			fail("could not copy file to ingest area. \n"+e);
+		}
+		waitForJobsToFinish(originalName,500);
+		
+		Object object = fetchObjectFromDB(originalName);
+		return object;
+	}	
 }

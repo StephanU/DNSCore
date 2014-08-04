@@ -29,10 +29,8 @@ import java.util.List;
 import javax.xml.stream.XMLStreamException;
 
 import org.apache.commons.io.FileUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-import de.uzk.hki.da.convert.JhoveScanService;
+import de.uzk.hki.da.format.JhoveScanService;
 import de.uzk.hki.da.metadata.PremisXmlJhoveExtractor;
 import de.uzk.hki.da.metadata.PremisXmlReader;
 import de.uzk.hki.da.metadata.PremisXmlValidator;
@@ -42,6 +40,7 @@ import de.uzk.hki.da.model.Event;
 import de.uzk.hki.da.model.Object;
 import de.uzk.hki.da.model.Package;
 import de.uzk.hki.da.model.PublicationRight;
+import de.uzk.hki.da.utils.Path;
 
 /**
  * 
@@ -50,8 +49,6 @@ import de.uzk.hki.da.model.PublicationRight;
  */
 public class CreatePremisAction extends AbstractAction {
 
-	static final Logger logger = LoggerFactory.getLogger(CreatePremisAction.class);
-	
 	private JhoveScanService jhoveScanService;
 	
 	private List<Event> addedEvents = new ArrayList<Event>();
@@ -70,7 +67,7 @@ public class CreatePremisAction extends AbstractAction {
 		newPREMISObject.setContractor(object.getContractor());
 		
 		Object sipPREMISObject = parseSipPremisFile(
-				new File(object.getDataPath() + object.getNameOfNewestARep() + "/premis.xml"));
+				Path.makeFile(object.getDataPath(),object.getNameOfNewestARep(),"premis.xml"));
 		
 		if (sipPREMISObject.getPackages().size() > 0) {
 			object.getLatestPackage().getEvents().addAll(sipPREMISObject.getPackages().get(0).getEvents());
@@ -87,10 +84,10 @@ public class CreatePremisAction extends AbstractAction {
 		
 		newPREMISObject.getPackages().add(object.getLatestPackage());
 		
-		if (object.hasDeltas()){
+		if (object.isDelta()){
 		
 			Object mainPREMISObject = parseOldPremisFile(
-					new File(object.getDataPath() + "premis_old.xml"));
+					Path.makeFile(object.getDataPath(),"premis_old.xml"));
 
 			if (mainPREMISObject==null) throw new RuntimeException("mainPREMISObject is null");
 			if (mainPREMISObject.getPackages()==null) throw new RuntimeException("mainPREMISObject.getPackages is null");
@@ -115,8 +112,8 @@ public class CreatePremisAction extends AbstractAction {
 				
 		checkConvertEvents(newPREMISObject);
 	
-		File newPREMISXml = new File(object.getDataPath() + 
-				object.getNameOfNewestBRep() + "/premis.xml");
+		File newPREMISXml = Path.make(object.getDataPath(), 
+				object.getNameOfNewestBRep(),"premis.xml").toFile();
 		logger.trace("trying to write new Premis file at " + newPREMISXml.getAbsolutePath());
 		new PremisXmlWriter().serialize(newPREMISObject, newPREMISXml);
 		
@@ -158,8 +155,8 @@ public class CreatePremisAction extends AbstractAction {
 			}
 		}
 		
-		actionCommunicatorService.addDataObject(job.getId(), "static_nondisclosure_limit", static_nondisclosure_limit);
-		actionCommunicatorService.addDataObject(job.getId(), "dynamic_nondisclosure_limit", dynamic_nondisclosure_limit);
+		job.setDynamic_nondisclosure_limit(dynamic_nondisclosure_limit);
+		job.setStatic_nondisclosure_limit(static_nondisclosure_limit);
 	}
 	
 	private Event generateIngestEventElement() {
@@ -259,7 +256,7 @@ public class CreatePremisAction extends AbstractAction {
 	@Override
 	void rollback() throws Exception {
 		
-		new File(object.getDataPath() + object.getNameOfNewestBRep() + "/premis.xml").delete();
+		Path.make(object.getDataPath(),object.getNameOfNewestBRep(),"premis.xml").toFile().delete();
 		
 		File tempFolder = new File(jhoveScanService.getJhoveFolder() + "/temp/" + job.getId() + "/premis_output/");
 		if (tempFolder.exists())
@@ -267,8 +264,8 @@ public class CreatePremisAction extends AbstractAction {
 		
 		object.getLatestPackage().getEvents().removeAll(addedEvents);
 		
-		actionCommunicatorService.removeDataObject(job.getId(), "static_nondisclosure_limit");
-		actionCommunicatorService.removeDataObject(job.getId(), "dynamic_nondisclosure_limit");
+		job.setStatic_nondisclosure_limit(null);
+		job.setDynamic_nondisclosure_limit(null);
 	}
 
 	public void setJhoveScanService(JhoveScanService jhoveScanService) {

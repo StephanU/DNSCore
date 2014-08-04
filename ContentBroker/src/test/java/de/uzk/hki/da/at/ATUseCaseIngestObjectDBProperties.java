@@ -46,7 +46,7 @@ public class ATUseCaseIngestObjectDBProperties extends Base{
 	}
 	
 	@After
-	public void tearDown() throws IOException{
+	public void tearDown(){
 		clearDB();
 		cleanStorage();
 	}
@@ -107,7 +107,7 @@ public class ATUseCaseIngestObjectDBProperties extends Base{
 		assertThat(StringUtils.countOccurrencesOf(object.getMost_recent_formats(), "fmt/353")).isEqualTo(1);
 		
 		assertEquals(100, object.getObject_state());
-		assertEquals(nodeName,object.getInitial_node());
+		assertEquals(localNode.getName(),object.getInitial_node());
 	}
 
 	/**

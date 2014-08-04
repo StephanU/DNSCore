@@ -1,1 +1,4 @@
 /activemq-data
+.project
+/.settings/
+/target

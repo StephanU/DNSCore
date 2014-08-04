@@ -24,11 +24,8 @@ import java.io.FileNotFoundException;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import de.uzk.hki.da.convert.FormatScanService;
 import de.uzk.hki.da.core.ConfigurationException;
+import de.uzk.hki.da.format.FormatScanService;
 import de.uzk.hki.da.grid.DistributedConversionAdapter;
 import de.uzk.hki.da.model.ConversionInstruction;
 import de.uzk.hki.da.model.ConversionInstructionBuilder;
@@ -36,7 +33,6 @@ import de.uzk.hki.da.model.ConversionPolicy;
 import de.uzk.hki.da.model.DAFile;
 import de.uzk.hki.da.model.Package;
 import de.uzk.hki.da.model.PreservationSystem;
-import de.uzk.hki.da.service.PackageTypeDetectionService;
 
 
 /**
@@ -45,7 +41,6 @@ import de.uzk.hki.da.service.PackageTypeDetectionService;
  */
 public class ScanForPresentationAction extends AbstractAction{
 	
-	static final Logger logger = LoggerFactory.getLogger(ScanForPresentationAction.class);
 	private FormatScanService formatScanService;
 	private PreservationSystem preservationSystem;
 	private final ConversionInstructionBuilder ciB = new ConversionInstructionBuilder();
@@ -61,6 +56,9 @@ public class ScanForPresentationAction extends AbstractAction{
 		if (preservationSystem==null) // So we can prevent the preservationSystem to be instantiated in unit tests.
 			preservationSystem = new PreservationSystem(dao);
 		
+		// check if object package type is set
+		
+		
 		List<DAFile> newestFiles = object.getNewestFilesFromAllRepresentations(sidecarExtensions);
 		if (newestFiles.size() == 0)
 			throw new RuntimeException("No files found!");
@@ -73,17 +71,6 @@ public class ScanForPresentationAction extends AbstractAction{
 		for (ConversionInstruction ci:cisPres) logger.info("Built conversionInstructionForPresentation: "+ci.toString());
 		
 		job.getConversion_instructions().addAll(cisPres);
-		
-		// detect package type
-		PackageTypeDetectionService ptds = new PackageTypeDetectionService(object.getLatestPackage());
-		String packageType = ptds.getPackageType();
-		String metadataFile = ptds.getMetadataFile();
-		if (packageType == null || metadataFile == null) {
-			logger.warn("Could not determine package type. ");
-		} else {
-			actionCommunicatorService.addDataObject(job.getId(), "package_type", packageType);
-			actionCommunicatorService.addDataObject(job.getId(), "metadata_file", metadataFile);
-		}
 		
 		return true;
 	}
@@ -118,9 +105,15 @@ public class ScanForPresentationAction extends AbstractAction{
 			// get cps for fileanduser. do with cps: assemble
 			
 			logger.trace("Generating ConversionInstructions for PRESENTER");
-			for (ConversionPolicy p:
-				preservationSystem.getApplicablePolicies(file, "PRESENTER"))
-			{
+			List<ConversionPolicy> policies = preservationSystem.getApplicablePolicies(file, "PRESENTER");
+			if ( object.grantsRight("PUBLICATION")
+					&& !file.toRegularFile().getName().toLowerCase().endsWith(".xml")
+					&& !file.toRegularFile().getName().toLowerCase().endsWith(".rdf")
+					&& !file.toRegularFile().getName().toLowerCase().endsWith(".xmp")
+					&& (policies == null || policies.isEmpty()) ) {
+				throw new RuntimeException("No policy found for file "+file.toRegularFile().getAbsolutePath()
+						+"("+file.getFormatPUID()+")! Package can not be published because it would be incomplete.");
+			} else for (ConversionPolicy p : policies)	{
 				logger.info("Found applicable Policy for FileFormat "+p.getSource_format()+" -> "+p.getConversion_routine().getName() + "("+ file.getRelative_path()+ ")");
 				ConversionInstruction ci = ciB.assembleConversionInstruction(file, p);
 				ci.setTarget_folder(ci.getTarget_folder());

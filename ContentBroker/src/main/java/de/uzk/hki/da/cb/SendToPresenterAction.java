@@ -21,7 +21,6 @@ package de.uzk.hki.da.cb;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileReader;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStream;
@@ -34,17 +33,19 @@ import org.apache.commons.lang.NotImplementedException;
 import org.apache.tika.Tika;
 import org.jdom.Document;
 import org.jdom.Element;
-import org.jdom.Namespace;
+import org.jdom.JDOMException;
 import org.jdom.input.SAXBuilder;
 import org.jdom.output.XMLOutputter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
+import de.uzk.hki.da.core.ConfigurationException;
+import de.uzk.hki.da.metadata.DCReader;
 import de.uzk.hki.da.metadata.XepicurWriter;
 import de.uzk.hki.da.model.DAFile;
 import de.uzk.hki.da.model.Event;
 import de.uzk.hki.da.repository.RepositoryException;
 import de.uzk.hki.da.repository.RepositoryFacade;
+import de.uzk.hki.da.utils.C;
+import de.uzk.hki.da.utils.Path;
 import de.uzk.hki.da.utils.XMLUtils;
 
 /** 
@@ -60,6 +61,7 @@ import de.uzk.hki.da.utils.XMLUtils;
  * publication with OAI-PMH is present in the repository.
  * 
  * @author Sebastian Cuy
+ * @author Daniel M. de Oliveira
  */
 /*
  * TODO refactor in a way that a single FOXML-File is created
@@ -68,75 +70,161 @@ import de.uzk.hki.da.utils.XMLUtils;
 */
 public class SendToPresenterAction extends AbstractAction {
 
-	static final Logger logger = LoggerFactory.getLogger(SendToPresenterAction.class);
-	
+	private static final String OPEN_COLLECTION_URI = "info:fedora/collection:open";
+	private static final String CLOSED_COLLECTION_URI = "info:fedora/collection:closed";
+	private static final String IDENTIFIER = "identifier";
+	private static final String ddb = "ddb";
+	private static final String DC = "DC";
+	private static final String PURL_ORG_DC = "http://purl.org/dc/elements/1.1/";
+	private static final String ENCODING = "UTF-8";
+	private static final String OPENARCHIVES_OAI_IDENTIFIER = "http://www.openarchives.org/OAI/2.0/identifier";
+	private static final String OAI_DANRW_DE = "oai:danrw.de:";
+	private static final String MEMBER = "info:fedora/fedora-system:def/relations-external#isMemberOf";
+	private static final String MEMBER_COLLECTION = "info:fedora/fedora-system:def/relations-external#isMemberOfCollection";
+	private static final String dip = "dip";
+	private static final String institution = "institution";
+	private static final String _public = "public";
+	private static final String pips = "pips";
+
 	private RepositoryFacade repositoryFacade;
 	private Map<String,String> viewerUrls;
 	private Set<String> fileFilter;
 	private Map<String,String> labelMap;
 	private Set<String> testContractors;
 	
-	SendToPresenterAction(){}
-
+	private DCReader dcReader;
+	
+	private String openCollectionName;
+	private String closedCollectionName;
+	
+	
+	/**
+	 * Preconditions:
+	 * There can be two pips at
+	 * workAreaRoot/pips/public/shortname/oid
+	 * workAreaRoot/pips/insitution/shortname/oid
+	 * Each of them must contain a DC.xml with a format tag set to one of the supported formats.
+	 * For every format tag which can exist there must be a viewer url configured
+	 * 
+	 */
 	@Override
 	public boolean implementation() throws IOException {
-		
 		if (repositoryFacade == null) 
-			throw new RuntimeException("Repository facade object not set. Make sure the action is configured properly");
+			throw new ConfigurationException("Repository facade object not set. Make sure the action is configured properly");
+		if (viewerUrls == null)
+			throw new ConfigurationException("viewerUrls is not set.");
+		if (fileFilter == null)
+			throw new ConfigurationException("fileFilter is not set");
+		if (testContractors == null)
+			throw new ConfigurationException("testContractors is not set");
 		
-		String dipPathPublic = new StringBuilder(localNode.getDipAreaRootPath())
-			.append("public/").append(object.getContractor().getShort_name())
-			.append("/").append(object.getIdentifier()).toString();
-		logger.debug("generated dipPathPublic: {}", dipPathPublic);
-		String dipPathInstitution = new StringBuilder(localNode.getDipAreaRootPath())
-			.append("institution/").append(object.getContractor().getShort_name())
-			.append("/").append(object.getIdentifier()).toString();
-		logger.debug("generated dipPathInstitution: {}", dipPathInstitution);
+		if (object.getUrn()==null||object.getUrn().isEmpty())
+			throw new RuntimeException("urn not set");
 		
-		String packageType = getPackageTypeFromDC(dipPathPublic, dipPathInstitution);
 		
-		// build map that contains original filenames for labeling
+
+		purgeObjectsIfExist();
+		buildMapWithOriginalFilenamesForLabeling();
+		
+		Path pipPathPublic = Path.make(localNode.getWorkAreaRootPath(),pips,_public,object.getContractor().getShort_name(),object.getIdentifier());
+		Path pipPathInstitution = Path.make(localNode.getWorkAreaRootPath(),pips,institution,object.getContractor().getShort_name(),object.getIdentifier());
+		if (!pipPathPublic.toFile().exists()) 
+			logger.warn(pipPathPublic+" does not exist.");
+		if (!pipPathInstitution.toFile().exists()) 
+			logger.warn(pipPathInstitution + " does not exist.");
+
+		String packageType = getDcReader().getPackageTypeFromDC(pipPathPublic, pipPathInstitution);
+		logger.debug("read package type from dc: "+packageType);
+		if (!viewerUrls.containsKey(packageType))
+			logger.warn("could not determine a viewerUrl for package type");
+
+		boolean publicPIPSuccesfullyIngested = false;
+		boolean institutionPIPSuccessfullyIngested = false;
+		if (pipPathPublic.toFile().exists())
+			publicPIPSuccesfullyIngested = createXEpicurAndIngest(pipPathPublic,getOpenCollectionName(),packageType,object.getUrn(),true);
+		if (pipPathInstitution.toFile().exists()) 
+			institutionPIPSuccessfullyIngested = createXEpicurAndIngest(pipPathInstitution, getClosedCollectionName(), packageType, object.getUrn(), false);
+		
+		setPublishedFlag(publicPIPSuccesfullyIngested,
+				institutionPIPSuccessfullyIngested);
+		return true;
+	}
+
+
+	/**
+	 * build map that contains original filenames for labeling
+	 */
+	private void buildMapWithOriginalFilenamesForLabeling() {
 		labelMap = new HashMap<String,String>();
 		for (Event e:object.getLatestPackage().getEvents()) {			
 			if (!"CONVERT".equals(e.getType())) continue;
 			DAFile targetFile = e.getTarget_file();
-			if (!targetFile.getRep_name().startsWith("dip")) continue;			
+			if (!targetFile.getRep_name().startsWith(dip)) continue;			
 			DAFile sourceFile = e.getSource_file();
 			labelMap.put(targetFile.getRelative_path(), sourceFile.getRelative_path());			
 		}
-		
-		String urn = object.getUrn();
-
-		int publishedFlag = 0;
-		
+	}
+	
+	
+	/**
+	 * delete existing packages before ingesting the new ones
+	 * @throws RuntimeException
+	 */
+	private void purgeObjectsIfExist(){
 		try {
-
-			// delete existing packages before ingesting the new ones
-			getRepositoryFacade().purgeObjectIfExists(object.getIdentifier(), "danrw");
-			getRepositoryFacade().purgeObjectIfExists(object.getIdentifier(), "danrw-closed");
-		
-			if (new File(dipPathPublic).exists()) {				
-				// write xepicur file for urn resolving
-				XepicurWriter.createXepicur(object.getIdentifier(), packageType, viewerUrls.get(packageType), dipPathPublic);
-				String[] sets = null;
-				if (!object.ddbExcluded()) {
-					sets = new String[]{ "ddb" };
-				}
-				// ingest package to public collection
-				if (ingestPackage(urn, object.getIdentifier(), "danrw", dipPathPublic, object.getContractor().getShort_name(), packageType, sets))
-					publishedFlag += 1;
-			}
-			if (new File(dipPathInstitution).exists()) {
-				// write xepicur file for urn resolving
-				XepicurWriter.createXepicur(object.getIdentifier(), packageType, viewerUrls.get(packageType), dipPathInstitution);
-				// ingest package to closed collection
-				if (ingestPackage(urn, object.getIdentifier(), "danrw-closed", dipPathInstitution, object.getContractor().getShort_name(), packageType, null))
-					publishedFlag += 2;
-			}
-			
+			getRepositoryFacade().purgeObjectIfExists(object.getIdentifier(), getOpenCollectionName());
+			getRepositoryFacade().purgeObjectIfExists(object.getIdentifier(), getClosedCollectionName());
 		} catch (RepositoryException e) {
 			throw new RuntimeException(e);
 		}
+	}
+	
+	
+	/**
+	 * write xepicur file for urn resolving and ingest into collection
+	 * @param path
+	 * @param collectionName
+	 * @param packageType
+	 * @param urn
+	 * @param checkSets
+	 * @return
+	 * @throws IOException
+	 * @throws RuntimeException if catched RepositoryException from ingest.
+	 */
+	private boolean createXEpicurAndIngest(Path path,String collectionName,String packageType,String urn,boolean checkSets) throws IOException{
+
+		XepicurWriter.createXepicur(
+				object.getIdentifier(), packageType, 
+				viewerUrls.get(packageType), 
+				path.toString());
+		
+		String[] sets = null;
+		if (checkSets){
+			if (!object.ddbExcluded()) {
+				sets = new String[]{ ddb };
+			}
+		}
+			
+		try {
+			return ingestPackage(urn, object.getIdentifier(), collectionName, path, object.getContractor().getShort_name(), packageType, sets);
+		} catch (RepositoryException e) {
+			throw new RuntimeException(e);
+		}
+		
+	}
+
+	/**
+	 * @param publicPIPSuccesfullyIngested
+	 * @param institutionPIPSuccessfullyIngested
+	 */
+	private void setPublishedFlag(
+			boolean publicPIPSuccesfullyIngested,
+			boolean institutionPIPSuccessfullyIngested) {
+		
+		int publishedFlag = 0;
+
+		if (publicPIPSuccesfullyIngested) publishedFlag += 1;
+		if (institutionPIPSuccessfullyIngested) publishedFlag += 2;
 
 		object.setPublished_flag(publishedFlag);
 		
@@ -146,87 +234,27 @@ public class SendToPresenterAction extends AbstractAction {
 		if (publishedFlag % 2 == 0) {
 			setKILLATEXIT(true);
 		}
-		
-		return true;
-	}
-	
-	@Override
-	public void rollback() {
-		throw new NotImplementedException("No rollback implemented for this action");
 	}
 
-	public Map<String,String> getViewerUrls() {
-		return viewerUrls;
-	}
-
-	public void setViewerUrls(Map<String,String> viewerUrls) {
-		this.viewerUrls = viewerUrls;
-	}
-
-	/**
-	 * Get the repository facade
-	 * @return the repository facade
-	 */
-	public RepositoryFacade getRepositoryFacade() {
-		return repositoryFacade;
-	}
 	
 	/**
-	 * Set the repository facade
-	 * @param the repository facade
+	 * @param urn
+	 * @param objectId
+	 * @param collection
+	 * @param packagePath
+	 * @param contractorShortName
+	 * @param packageType
+	 * @param sets
+	 * @return
+	 * @throws RepositoryException
+	 * @throws IOException
 	 */
-	public void setRepositoryFacade(RepositoryFacade repositoryFacade) {
-		this.repositoryFacade = repositoryFacade;
-	}
-	
-	/**
-	 * Get the set of filenames to be filtered during ingest
-	 * @return the set of filenames to be filtered during ingest
-	 */
-	public Set<String> getFileFilter() {
-		return fileFilter;
-	}
-	
-	/**
-	 * Set the set of filenames to be filtered during ingest
-	 * @param fileFilter the set of filenames to be filtered during ingest
-	 */
-	public void setFileFilter(Set<String> fileFilter) {
-		this.fileFilter = fileFilter;
-	}
-
-	private String getPackageTypeFromDC(String dipPathPublic, String dipPathInstitution) {
-		String packageType = null;
-		File dcFile = new File(dipPathPublic + "/DC.xml");
-		if (!dcFile.exists())
-			dcFile = new File(dipPathInstitution + "/DC.xml");
-		if (dcFile.exists()) {
-			SAXBuilder builder = XMLUtils.createNonvalidatingSaxBuilder();
-			Document doc;
-			try {
-				doc = builder.build(new FileReader(dcFile));
-				Element formatEl = doc.getRootElement().getChild("format",
-						Namespace.getNamespace("http://purl.org/dc/elements/1.1/"));
-				if (formatEl == null) {
-					logger.warn("No format element found in DC, unable to determine package type!");
-				} else {
-					packageType = formatEl.getTextNormalize();
-				}
-			} catch (Exception e) {
-				logger.error("Error while parsing DC, unable to determine package type.", e);
-			}
-		} else {
-			logger.warn("No DC file found, unable to determine package type!");
-		}
-		return packageType;
-	}	
-	
 	private boolean ingestPackage(String urn, String objectId, String collection,
-			String packagePath, String contractorShortName, String packageType,
+			Path packagePath, String contractorShortName, String packageType,
 			String[] sets) throws RepositoryException, IOException {
 		
 		// check if pip exists
-		File pack = new File(packagePath);
+		File pack = packagePath.toFile();
 		if (!pack.exists()) {
 			throw new IOException("Directory " + packagePath +" does not exist");
 		}
@@ -237,58 +265,68 @@ public class SendToPresenterAction extends AbstractAction {
 		}			
 		
 		// walk package and add files as datastreams recursively
-		ingestDir(objectId, collection, pack, packagePath, packageType);
+		ingestDir(objectId, collection, pack, packagePath.toString(), packageType);
 		
 		// add identifiers to DC datastream
+		String url = "http://www.danrw.de/objects/" + objectId;
+		SAXBuilder builder = XMLUtils.createNonvalidatingSaxBuilder();
+		Document doc;
 		try {
-			String url = "http://www.danrw.de/objects/" + objectId;
-			InputStream result = repositoryFacade.retrieveFile(objectId, collection, "DC");
-			SAXBuilder builder = XMLUtils.createNonvalidatingSaxBuilder();
-			Document doc = builder.build(result);
+			InputStream in = repositoryFacade.retrieveFile(objectId, collection, DC);
+			
+			try{
+				in.reset();
+			}catch(IOException io){}
+			doc = builder.build(in);
+		} catch (JDOMException e) {
+			throw new RuntimeException(e);
+		}
+		
+		try {
 			doc.getRootElement().addContent(
-					new Element("identifier","dc","http://purl.org/dc/elements/1.1/")
+					new Element(IDENTIFIER,DC,PURL_ORG_DC)
 					.setText(urn));
 			doc.getRootElement().addContent(
-					new Element("identifier","dc","http://purl.org/dc/elements/1.1/")
+					new Element(IDENTIFIER,DC,PURL_ORG_DC)
 					.setText(url));
-			String content = new XMLOutputter().outputString(doc);
-			repositoryFacade.updateMetadataFile(objectId, collection, "DC", content, "DC.xml", "text/xml");
-		    logger.info("Successfully added identifiers to DC datastream");
 		} catch (Exception e) {
 			throw new RepositoryException("Failed to add identifiers to object in repository",e);
 		}
+		String content = new XMLOutputter().outputString(doc);
+		repositoryFacade.updateMetadataFile(objectId, collection, DC, content, DC+".xml", "text/xml");
+		logger.info("Successfully added identifiers to DC datastream");
 		
 		// add RELS-EXT relationships
 		try {
 
 			// add urn as owl:sameAs
-			repositoryFacade.addRelationship(objectId, collection, "http://www.w3.org/2002/07/owl#sameAs", urn);
-			logger.debug("Added relationship: owl:sameAs " + urn);
+			repositoryFacade.addRelationship(objectId, collection, C.OWL_SAMEAS, urn);
+			logger.debug("Added relationship: "+C.OWL_SAMEAS+" "+urn);
 			
 			// add collection membership
 			String collectionUri;
-			if ("danrw-closed".equals(collection)) {
-				collectionUri = "info:fedora/collection:closed";
+			if (getClosedCollectionName().equals(collection)) {
+				collectionUri = CLOSED_COLLECTION_URI;
 			} else {
-				collectionUri = "info:fedora/collection:open";
+				collectionUri = OPEN_COLLECTION_URI;
 			}
-			repositoryFacade.addRelationship(objectId, collection, "info:fedora/fedora-system:def/relations-external#isMemberOfCollection", collectionUri);
-			logger.debug("Added relationship: rels-ext:isMemberOfCollection " + collectionUri);
+			repositoryFacade.addRelationship(objectId, collection, MEMBER_COLLECTION, collectionUri);
+			logger.debug("Added relationship: "+MEMBER_COLLECTION+" "+ collectionUri);
 			
 			// add oai identifier
-			if (!"danrw-closed:".equals(collection) && 
+			if (!(getClosedCollectionName()+":").equals(collection) && 
 				// don't add test packages to OAI-PMH
 				!testContractors.contains(contractorShortName)
 			) {
-				String oaiId = "oai:danrw.de:" + objectId;
-				repositoryFacade.addRelationship(objectId, collection, "http://www.openarchives.org/OAI/2.0/identifier", oaiId);
-				logger.debug("Added relationship: oai:identifier " + oaiId);
+				String oaiId = OAI_DANRW_DE + objectId;
+				repositoryFacade.addRelationship(objectId, collection, OPENARCHIVES_OAI_IDENTIFIER, oaiId);
+				logger.debug("Added relationship: "+OPENARCHIVES_OAI_IDENTIFIER+" " + oaiId);
 			}
 			
 			// add oai sets
 			if (sets != null) for (String set : sets) {
-				repositoryFacade.addRelationship(objectId, collection, "info:fedora/fedora-system:def/relations-external#isMemberOf", "info:fedora/set:" + set);
-				logger.debug("Added relationship: rels-ext:isMemberOf info:fedora/set:" + set);
+				repositoryFacade.addRelationship(objectId, collection, MEMBER, "info:fedora/set:" + set);
+				logger.debug("Added relationship: "+MEMBER+" info:fedora/set:" + set);
 			}
 			
 		} catch (Exception e) {
@@ -298,8 +336,11 @@ public class SendToPresenterAction extends AbstractAction {
 		return true;
 	}
 
+	
+	
+	
 	private void ingestDir(String objectId, String collection, File dir, String packagePath, String packageType) throws RepositoryException, IOException {
-
+			
 		File files[] = dir.listFiles(new FilenameFilter() {
 			public boolean accept(File dir, String name) {
 				if (getFileFilter().contains(name)) return false;
@@ -316,9 +357,23 @@ public class SendToPresenterAction extends AbstractAction {
 				}
 			}
 		}
-
 	}	
 
+	
+	
+	/**
+	 * Either ingests a file into the repositoryFacade or, in case it is a metadataFile,
+	 * it creates a the correspoding metadata datasream via repositoryFacade
+	 * 
+	 * @param objectId
+	 * @param collection
+	 * @param file
+	 * @param packagePath
+	 * @param packageType
+	 * @return
+	 * @throws RepositoryException
+	 * @throws IOException
+	 */
 	private boolean ingestFile(String objectId, String collection, File file, String packagePath, String packageType) throws RepositoryException, IOException {
 		
 		boolean isMetadataFile = false;
@@ -331,11 +386,11 @@ public class SendToPresenterAction extends AbstractAction {
 		String fileId = repositoryFacade.generateFileId(relPath);
 		
 		// special file IDs for metadata files
-		if (file.getName().equals("DC.xml")) {
-			fileId = "DC";
+		if (file.getName().equalsIgnoreCase(DC+".xml")) {
+			fileId = DC;
 			isMetadataFile = true;
 			mimeType = "text/xml";
-		} else if (file.getName().equals(packageType + ".xml") || file.getName().equals(packageType + ".rdf")) {
+		} else if (file.getName().equalsIgnoreCase(packageType + ".xml") || file.getName().equalsIgnoreCase(packageType + ".rdf")) {
 			fileId = packageType;
 			isMetadataFile = true;
 		}
@@ -346,8 +401,9 @@ public class SendToPresenterAction extends AbstractAction {
 		}
 		if (isMetadataFile) {
 			FileInputStream fileInputStream = new FileInputStream(file);
-			String content = IOUtils.toString(fileInputStream, "UTF-8");
+			String content = IOUtils.toString(fileInputStream, ENCODING);
 			fileInputStream.close();
+			
 			repositoryFacade.createMetadataFile(objectId, collection, fileId, content, label, mimeType);
 		} else {
 			repositoryFacade.ingestFile(objectId, collection, fileId, file, label, mimeType);
@@ -360,7 +416,7 @@ public class SendToPresenterAction extends AbstractAction {
 	
 	private String detectMimeType(File file) throws IOException {
 		
-		// TODO: read from premis when available
+		// TODO: read from premis when available or: better: provide in DAFile!
 		
 		String mimeType;
 	    Tika tika = new Tika();
@@ -395,4 +451,81 @@ public class SendToPresenterAction extends AbstractAction {
 		this.testContractors = testContractors;
 	}
 
+	public DCReader getDcReader() {
+		return dcReader;
+	}
+
+	public void setDcReader(DCReader dcReader) {
+		this.dcReader = dcReader;
+	}
+	
+	@Override
+	public void rollback() {
+		throw new NotImplementedException("No rollback implemented for this action");
+	}
+	
+	/**
+	 * For every package type read from the DC.xml (like "EAD"), there is a viewer url 
+	 * @return
+	 */
+	public Map<String,String> getViewerUrls() {
+		return viewerUrls;
+	}
+
+	public void setViewerUrls(Map<String,String> viewerUrls) {
+		this.viewerUrls = viewerUrls;
+	}
+	
+	/**
+	 * Get the repository facade
+	 * @return the repository facade
+	 */
+	public RepositoryFacade getRepositoryFacade() {
+		return repositoryFacade;
+	}
+	
+	/**
+	 * Set the repository facade
+	 * @param the repository facade
+	 */
+	public void setRepositoryFacade(RepositoryFacade repositoryFacade) {
+		this.repositoryFacade = repositoryFacade;
+	}
+	
+	/**
+	 * Get the set of filenames to be filtered during ingest
+	 * @return the set of filenames to be filtered during ingest
+	 */
+	public Set<String> getFileFilter() {
+		return fileFilter;
+	}
+	
+	/**
+	 * Set the set of filenames to be filtered during ingest
+	 * @param fileFilter the set of filenames to be filtered during ingest
+	
+	 */
+	public void setFileFilter(Set<String> fileFilter) {
+		this.fileFilter = fileFilter;
+	}
+
+
+	public String getOpenCollectionName() {
+		return openCollectionName;
+	}
+
+
+	public void setOpenCollectionName(String openCollectionName) {
+		this.openCollectionName = openCollectionName;
+	}
+
+
+	public String getClosedCollectionName() {
+		return closedCollectionName;
+	}
+
+
+	public void setClosedCollectionName(String closedCollectionName) {
+		this.closedCollectionName = closedCollectionName;
+	}
 }

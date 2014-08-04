@@ -31,8 +31,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import de.uzk.hki.da.model.Node;
-import de.uzk.hki.da.model.StoragePolicy;
 import de.uzk.hki.da.utils.ArchiveBuilderFactory;
 
 /**
@@ -46,16 +44,16 @@ public class ATUseCaseRetrieval extends Base{
 	@Before()
 	public void setUp() throws IOException{
 		setUpBase();
-		gridFacade.put(
-				new File("src/test/resources/at/ATUseCaseRetrieval.pack_1.tar"),
-				"/aip/TEST/RetrievalObject/ID-ATUseCaseRetrieval.pack_1.tar",new StoragePolicy(new Node()));
+//		gridFacade.put(
+//				new File("src/test/resources/at/ATUseCaseRetrieval.pack_1.tar"),
+//				"TEST/ID-ATUseCaseRetrieval/ID-ATUseCaseRetrieval.pack_1.tar",new StoragePolicy(new Node()));
 	}
 	
 	@After
-	public void tearDown() throws IOException{
+	public void tearDown(){
 		distributedConversionAdapter.remove("aip/TEST/ID-ATUseCaseRetrieval"); // TODO does it work?
 		new File("/tmp/ID-ATUseCaseRetrieval.tar").delete();
-		FileUtils.deleteDirectory(new File("/tmp/ID-ATUseCaseRetrieval"));
+		FileUtils.deleteQuietly(new File("/tmp/ID-ATUseCaseRetrieval"));
 		
 		cleanStorage();
 		clearDB();
@@ -69,12 +67,12 @@ public class ATUseCaseRetrieval extends Base{
 		String name = "ATUseCaseRetrieval";
 		createObjectAndJob(name,"900");
 		waitForJobToBeInStatus(name, "950", 2000);
-		Thread.sleep(60000);
-		System.out.println(new File(userAreaRootPath+"TEST/outgoing/ID-ATUseCaseRetrieval.tar").getAbsolutePath());
-		assertTrue(new File(userAreaRootPath+"TEST/outgoing/ID-ATUseCaseRetrieval.tar").exists());
+		
+		System.out.println(new File(localNode.getUserAreaRootPath()+"/TEST/outgoing/ID-ATUseCaseRetrieval.tar").getAbsolutePath());
+		assertTrue(new File(localNode.getUserAreaRootPath()+"/TEST/outgoing/ID-ATUseCaseRetrieval.tar").exists());
 		
 		FileUtils.moveFileToDirectory(
-				new File(userAreaRootPath+"TEST/outgoing/ID-ATUseCaseRetrieval.tar"), 
+				new File(localNode.getUserAreaRootPath()+"/TEST/outgoing/ID-ATUseCaseRetrieval.tar"), 
 				new File("/tmp"), false);
 		
 		ArchiveBuilderFactory.getArchiveBuilderForFile(new File("/tmp/ID-ATUseCaseRetrieval.tar"))

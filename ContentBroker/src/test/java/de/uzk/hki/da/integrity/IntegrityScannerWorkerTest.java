@@ -62,10 +62,10 @@ public class IntegrityScannerWorkerTest {
 	String urn = "123456";
 	
 	/** The package1 path. */
-	String package1Path = "/aip/TEST/"+urn+"/"+urn+".pack_1.tar";
+	String package1Path = "TEST/"+urn+"/"+urn+".pack_1.tar";
 	
 	/** The package2 path. */
-	String package2Path = "/aip/TEST/"+urn+"/"+urn+".pack_2.tar";
+	String package2Path = "TEST/"+urn+"/"+urn+".pack_2.tar";
 	
 	/** The obj. */
 	Object obj;
@@ -94,7 +94,6 @@ public class IntegrityScannerWorkerTest {
 		obj.setObject_state(66);
 		obj.setIdentifier(urn);
 		obj.setContractor(new Contractor("TEST","",""));
-		worker.setDao(dao);
 		Node node = new Node("test");
 		sp = new StoragePolicy(node);
 		worker.setMinNodes(3);
@@ -108,7 +107,7 @@ public class IntegrityScannerWorkerTest {
 	 */
 	@BeforeClass
 	public static void setUpBeforeClass() {
-		HibernateUtil.init("src/main/conf/hibernateCentralDB.cfg.xml.inmem");
+//		HibernateUtil.init("src/main/xml/hibernateCentralDB.cfg.xml.inmem");
 	}
 	
 	/**
@@ -118,7 +117,7 @@ public class IntegrityScannerWorkerTest {
 	 */
 	@After 
 	public void tearDown() throws IOException {
-		
+			// TODO clear the inmem object db
 	}
 	
 	
@@ -133,7 +132,7 @@ public class IntegrityScannerWorkerTest {
 		IrodsGridFacade gc = mock(IrodsGridFacade.class);
 		IrodsSystemConnector irods = mock (IrodsSystemConnector.class);
 		
-		when (irods.getZone()).thenReturn("da-nrw");
+		when (irods.getZone()).thenReturn("c-i");
 		
 		when (gc.getirodsSystemConnector()).thenReturn(irods);
 		
@@ -142,8 +141,7 @@ public class IntegrityScannerWorkerTest {
 		when (gc.isValid(package2Path)).thenReturn(false);
 		worker.setGridFacade(gc);
 		
-		worker.checkObject(obj);
-		assertEquals(51,obj.getObject_state());
+		assertEquals(51,worker.checkObjectValidity(obj));
 	}
 
 	
@@ -157,7 +155,7 @@ public class IntegrityScannerWorkerTest {
 	
 		IrodsGridFacade gc = mock(IrodsGridFacade.class);
 		IrodsSystemConnector irods = mock (IrodsSystemConnector.class);
-		when (irods.getZone()).thenReturn("da-nrw");
+		when (irods.getZone()).thenReturn("c-i");
 		
 
 		when (gc.getirodsSystemConnector()).thenReturn(irods);
@@ -168,7 +166,6 @@ public class IntegrityScannerWorkerTest {
 		
 		worker.setGridFacade(gc);
 		
-		worker.checkObject(obj);
-		assertEquals(100,obj.getObject_state());
+		assertEquals(100,worker.checkObjectValidity(obj));
 	}
 }

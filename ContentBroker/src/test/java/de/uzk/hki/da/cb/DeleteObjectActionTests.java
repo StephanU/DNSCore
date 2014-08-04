@@ -34,6 +34,7 @@ import org.junit.Test;
 import de.uzk.hki.da.core.UserException;
 import de.uzk.hki.da.model.Object;
 import de.uzk.hki.da.model.Package;
+import de.uzk.hki.da.utils.RelativePath;
 import de.uzk.hki.da.utils.TESTHelper;
 
 /**
@@ -41,36 +42,36 @@ import de.uzk.hki.da.utils.TESTHelper;
  */
 public class DeleteObjectActionTests {
 
-	private String workAreaRootPath = "src/test/resources/cb/DeleteObjectActionTests/work/";
+	private String workAreaRootPath = "src/test/resources/cb/DeleteObjectActionTests/";
 	private String ingestAreaRootPath = "src/test/resources/cb/DeleteObjectActionTests/ingest/";
 	private DeleteObjectAction action;
 	
 	@Before
 	public void setUp() throws IOException{
-		new File(workAreaRootPath+"TEST/123/data").mkdirs();
-		new File(workAreaRootPath+"TEST/abc.txt").createNewFile();
+		new File(workAreaRootPath+"work/TEST/123/data").mkdirs();
+		new File(workAreaRootPath+"work/TEST/abc.txt").createNewFile();
 		new File(ingestAreaRootPath+"TEST/abc.txt").createNewFile();
 	}
 	
 	@After
 	public void tearDown() throws IOException{
-		FileUtils.deleteDirectory(new File(workAreaRootPath+"TEST/123/data"));
-		new File(workAreaRootPath+"TEST/abc.txt").delete();
+		FileUtils.deleteDirectory(new File(workAreaRootPath+"work/TEST/123/data"));
+		new File(workAreaRootPath+"work/TEST/abc.txt").delete();
 		new File(ingestAreaRootPath+"TEST/abc.txt").delete();
 	}
 	
 	@Test
-	public void cleanFork() throws FileNotFoundException, UserException, IOException{
-		Object o = TESTHelper.setUpObject("123", workAreaRootPath);
-		o.getTransientNodeRef().setIngestAreaRootPath(ingestAreaRootPath);
+	public void cleanWorkArea() throws FileNotFoundException, UserException, IOException{
+		Object o = TESTHelper.setUpObject("123", new RelativePath(workAreaRootPath));
+		o.getTransientNodeRef().setIngestAreaRootPath(new RelativePath(ingestAreaRootPath));
 		o.getLatestPackage().setContainerName("abc.txt");
 		
 		action = new DeleteObjectAction();
 		action.setObject(o);
 		action.implementation();
 		
-		assertFalse(new File(workAreaRootPath+"TEST/123/").exists());
-		assertFalse(new File(workAreaRootPath+"TEST/abc.txt").exists());
+		assertFalse(new File(workAreaRootPath+"work/TEST/123/").exists());
+		assertFalse(new File(workAreaRootPath+"work/TEST/abc.txt").exists());
 		assertFalse(new File(ingestAreaRootPath+"TEST/abc.txt").exists());
 	}
 	
@@ -85,7 +86,7 @@ public class DeleteObjectActionTests {
 	@Test
 	public void testSetDeleteObjectFlag() throws FileNotFoundException, UserException, IOException{
 		action = new DeleteObjectAction();
-		action.setObject(TESTHelper.setUpObject("123", workAreaRootPath));
+		action.setObject(TESTHelper.setUpObject("123", new RelativePath(workAreaRootPath), new RelativePath(ingestAreaRootPath)));
 		action.implementation();
 
 		assertTrue(action.DELETEOBJECT);
@@ -94,8 +95,8 @@ public class DeleteObjectActionTests {
 	@Test
 	public void testSetDeletePackage() throws FileNotFoundException, UserException, IOException{
 		action = new DeleteObjectAction();
-		Object o = TESTHelper.setUpObject("123", workAreaRootPath);
-		Package p2 = new Package(); p2.setName("2"); 
+		Object o = TESTHelper.setUpObject("123", new RelativePath(workAreaRootPath), new RelativePath(ingestAreaRootPath));
+		Package p2 = new Package(); p2.setName("2"); p2.setContainerName("testcontainer.tgz");
 		o.getPackages().add(p2);
 		action.setObject(o);
 		action.implementation();

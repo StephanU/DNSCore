@@ -23,6 +23,7 @@ package daweb3
 @Author Scuy
 */
 import java.text.SimpleDateFormat;
+import org.hibernate.criterion.CriteriaSpecification
 
 class QueueEntry {
 	
@@ -31,14 +32,12 @@ class QueueEntry {
 	String initialNode
 	String created
 	String modified
-	String replDestinations
 	Object obj
 
     static constraints = {
 		status(nullable:false)
 		created(nullable:true)
 		modified(nullable:true)
-		replDestinations(nullable:true)	
 	}
 	
 	static mapping = {
@@ -49,6 +48,16 @@ class QueueEntry {
 		// necessary because dateCreated and dateModified seem to be reserved by grails
 		created column: 'date_created'
 		modified column: 'date_modified'
+	}
+	
+	
+	static QueueEntry getAllQueueEntriesForShortNameAndUrn(String shortName, String urn) {
+		return createCriteria().list  {
+			createAlias('obj', 'o', CriteriaSpecification.INNER_JOIN)
+			createAlias('o.contractor', 'contractor', CriteriaSpecification.INNER_JOIN)
+			eq("contractor.shortName", shortName)
+			eq("o.urn", urn)
+		}
 	}
 	
 	
@@ -84,6 +93,25 @@ class QueueEntry {
 		def checkfor = ["1","3","4"]
 		def ch = status[-1]
 		if (checkfor.contains(ch)) return true;
+		return false;
+	}
+	
+	String getIdAsString(){
+		return id.toString()
+	}
+	
+	/**
+	 * @author jpeters shows retry button after some time (48 hours)
+	 * 
+	 */
+	
+	boolean showRetryButtonAfterSomeTime(){
+		if (modified!=null && modified!="" && modified!="NULL" && modified.length()>5) {
+			long diff = new Date().getTime()-Long.valueOf(modified).longValue()*1000L;
+			if (diff > 2 * 24 * 60 * 60 * 1000) {
+				return true;
+			}
+		}
 		return false;
 	}
 	

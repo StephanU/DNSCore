@@ -69,7 +69,7 @@ public class RetrievePackagesHelper {
 		if (grid==null) throw new IllegalStateException("grid not set");
 		if (object==null) throw new IllegalArgumentException("corresponding Object is null");
 		if (object.getPackages().isEmpty()) throw new IllegalArgumentException("Object does not contain any packages");
-		if (!new File(object.getPath()).exists()) throw new IllegalArgumentException(object.getPath()+" does not exist");
+		if (!object.getPath().toFile().exists()) throw new IllegalArgumentException(object.getPath()+" does not exist");
 
 		for (Package pkg : object.getPackages()) {
 			
@@ -112,7 +112,7 @@ public class RetrievePackagesHelper {
 			String pn = pkg.getName();
 	
 			try {
-				objectSize += grid.getFileSize(irodsZonePath + "aip/" + obj.getContractor().getShort_name() + "/" + obj.getIdentifier() +
+				objectSize += grid.getFileSize( obj.getContractor().getShort_name() + "/" + obj.getIdentifier() +
 						"/" + obj.getIdentifier() + ".pack_" + pn + ".tar");
 			} catch (IOException e) {
 				throw new RuntimeException("Failed to determine file size", e);
@@ -130,11 +130,11 @@ public class RetrievePackagesHelper {
 	 * @throws IOException
 	 */
 	private File retrieveSinglePackageFromGrid(Object object,Package pkg) throws IOException{
-		String data_name = "/aip/"
-				+ object.getContractor().getShort_name() + "/" + object.getIdentifier()
+		String data_name =
+				object.getContractor().getShort_name() + "/" + object.getIdentifier()
 				+ "/" + object.getIdentifier() + ".pack_" + pkg.getName() + ".tar";
 		
-		if (!new File(object.getDataPath()).exists()) new File(object.getDataPath()).mkdirs();
+		if (!object.getDataPath().toFile().exists()) object.getDataPath().toFile().mkdirs();
 
 		File targetDir=new File(object.getPath() + "/loadedAIPs");
 		if (!targetDir.exists()) targetDir.mkdirs(); 
@@ -153,7 +153,6 @@ public class RetrievePackagesHelper {
 	/** The Constant logger. */
 	static final Logger logger = LoggerFactory.getLogger(RetrievePackagesHelper.class);
 	/** The Constant irodsZonePath. */
-	static final String irodsZonePath = "/da-nrw/";
 
 
 	/**
@@ -168,7 +167,7 @@ public class RetrievePackagesHelper {
 		
 		List<DAFile> results = new ArrayList<DAFile>();
 		
-		String loadedAIPsPath = object.getPath()+"loadedAIPs/";
+		String loadedAIPsPath = object.getPath()+"/loadedAIPs/";
 		
 		logger.debug("unpacking: " + container);			
 		results = unpackArchiveAndMoveContents(
@@ -177,7 +176,7 @@ public class RetrievePackagesHelper {
 		
 		removeBagitFilesAndPremis(loadedAIPsPath);	
 			
-		new File(object.getDataPath()).mkdir();
+		object.getDataPath().toFile().mkdir();
 		normalizeObject(object); // TODO really? for every package?
 		FileUtils.deleteDirectory(new File(loadedAIPsPath));
 		
@@ -249,7 +248,7 @@ public class RetrievePackagesHelper {
 	private void normalizeObject(Object object) throws IOException {
 	
 		logger.trace("normalizeObject: Moving unpacked representation folders from " + object.getPath() + "loadedAIPs to " + object.getPath());
-		String dataPath = object.getPath() + "loadedAIPs/data/";
+		String dataPath = object.getPath() + "/loadedAIPs/data/";
 		String dataPathContents[] = new File(dataPath).list();
 		
 		if (dataPathContents == null)
@@ -260,11 +259,11 @@ public class RetrievePackagesHelper {
 			if (new File(dataPath + dataPathContents[i]).isDirectory())
 				FileUtils.moveDirectoryToDirectory(
 						new File(dataPath + dataPathContents[i]), 
-						new File(object.getDataPath()), false);
+						object.getDataPath().toFile(), false);
 			else
 				FileUtils.moveFileToDirectory(
 						new File(dataPath + dataPathContents[i]), 
-						new File(object.getDataPath()), false );
+						object.getDataPath().toFile(), false );
 		}
 	}
 

@@ -29,20 +29,17 @@ import java.util.List;
 
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang.NotImplementedException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import de.uzk.hki.da.core.ConfigurationException;
 import de.uzk.hki.da.grid.GridFacade;
 import de.uzk.hki.da.model.StoragePolicy;
+import de.uzk.hki.da.utils.Path;
 
 /**
  * Does the decoupled and time based Archive Replication to the given minimum number of required nodes. 
  * @author Jens Peters
  */
 public class ArchiveReplicationAction extends AbstractAction {
-	
-	static final Logger logger = LoggerFactory.getLogger(ArchiveReplicationAction.class);
 	
 	public ArchiveReplicationAction(){}
 	
@@ -54,8 +51,7 @@ public class ArchiveReplicationAction extends AbstractAction {
 		if (gridRoot==null) throw new ConfigurationException("gridRoot not set");
 		
 		String filename = object.getIdentifier() + ".pack_" + object.getLatestPackage().getName() + ".tar";
-		String target = "/aip/"+object.getContractor().getShort_name()+"/"+object.getIdentifier()+"/"+filename;
-
+		Path target = Path.make(object.getContractor().getShort_name(), object.getIdentifier(), filename);
 		StoragePolicy sp = new StoragePolicy(localNode);
 		sp.setDestinations(new ArrayList<String>(getDestinations()));
 		
@@ -63,13 +59,13 @@ public class ArchiveReplicationAction extends AbstractAction {
 		if (!sp.isPolicyAchievable()) throw new RuntimeException ("POLICY is not achievable! More forbidden nodens then required minimal copies!");
 		
 		try {
-			if (gridRoot.put(new File(localNode.getWorkAreaRootPath() + object.getContractor().getShort_name()+"/" +filename), 
-					target, sp )) {
-				
-					new File(localNode.getWorkAreaRootPath() + object.getContractor().getShort_name() + "/"+filename).delete();
-			} 
+			Path newFilePath = Path.make(localNode.getWorkAreaRootPath(), "work", object.getContractor().getShort_name(), filename);
+			if (gridRoot.put(new File(newFilePath.toString()), 
+					target.toString(), sp )) {
+					new File(newFilePath.toString()).delete();
+			}
 		} catch (IOException e) {
-			throw new RuntimeException("Error while putting file into grid or fork deletion! ",e);
+			throw new RuntimeException("Error while putting file into grid or work deletion! ",e);
 		}
 				
 		return true;

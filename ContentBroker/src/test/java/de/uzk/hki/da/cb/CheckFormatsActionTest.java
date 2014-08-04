@@ -24,6 +24,7 @@ import static org.mockito.Matchers.anyObject;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -35,33 +36,15 @@ import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 import org.springframework.util.StringUtils;
 
-import de.uzk.hki.da.convert.FormatScanService;
-import de.uzk.hki.da.convert.JhoveScanService;
-import de.uzk.hki.da.core.ActionCommunicatorService;
+import de.uzk.hki.da.format.FormatScanService;
+import de.uzk.hki.da.format.JhoveScanService;
 import de.uzk.hki.da.model.Contractor;
 import de.uzk.hki.da.model.DAFile;
 import de.uzk.hki.da.model.Job;
 import de.uzk.hki.da.model.Node;
 import de.uzk.hki.da.model.Object;
-/*
-DA-NRW Software Suite | ContentBroker
-Copyright (C) 2013 Historisch-Kulturwissenschaftliche Informationsverarbeitung
-Universität zu Köln
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*/
 import de.uzk.hki.da.model.Package;
+import de.uzk.hki.da.utils.RelativePath;
 
 
 /**
@@ -71,17 +54,13 @@ import de.uzk.hki.da.model.Package;
  */
 public class CheckFormatsActionTest {
 
-	/** The base dir path. */
-	private String baseDirPath = "src/test/resources/cb/CheckFormatsActionTests/";
+	private String workAreaRootPath = "src/test/resources/cb/CheckFormatsActionTests/";
 	
 	/** The action. */
 	CheckFormatsAction action = new CheckFormatsAction();
 	
 	/** The job. */
 	private Job job;
-
-	/** The communicator. */
-	private ActionCommunicatorService communicator;
 
 	/** The local node. */
 	private Node localNode;
@@ -150,11 +129,10 @@ public class CheckFormatsActionTest {
 		localNode = new Node();
 		Contractor contractor = new Contractor();
 		contractor.setShort_name("TEST");
-		localNode.setWorkAreaRootPath(baseDirPath);
+		localNode.setWorkAreaRootPath(new RelativePath(workAreaRootPath));
 
 		JhoveScanService jhove = mock(JhoveScanService.class);
-		when(jhove.extract((DAFile)anyObject(),anyInt())).thenReturn("abc");
-		
+		when(jhove.extract((File)anyObject(),anyInt())).thenReturn("abc");
 		
 		final Package sipPackage = new Package(); sipPackage.setName("2"); // the SIP / Delta
 		final Package aipPackage = new Package(); aipPackage.setName("1"); // the existing AIP
@@ -192,7 +170,6 @@ public class CheckFormatsActionTest {
 		action.setJob(job);
 		action.setLocalNode(localNode);
 		action.setSidecarExtensions("");
-		action.setActionCommunicatorService(communicator);
 		action.setJhoveScanService(jhove);
 		
 	}
@@ -219,7 +196,7 @@ public class CheckFormatsActionTest {
 	public void testThatNewConvertedFileHasCorrectFormatInfoWithDeltas() throws IOException{
 		
 		Package oldPackage = new Package(); // the AIP
-		oldPackage.setName("1"); 
+		oldPackage.setName("1"); oldPackage.setTransientBackRefToObject(object);
 		DAFile newPackageOriginalFile  = new DAFile(oldPackage,"2000_01_01+00_00+a","_1.jpg");
 		DAFile newPackageConvertedFile = new DAFile(oldPackage,"2000_01_01+00_00+b","_1.tif"); 
 		List<DAFile> allFiles = new ArrayList<DAFile>(); allFiles.add(newPackageConvertedFile); allFiles.add(newPackageOriginalFile);

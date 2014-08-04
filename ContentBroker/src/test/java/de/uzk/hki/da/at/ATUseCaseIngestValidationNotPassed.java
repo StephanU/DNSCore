@@ -1,5 +1,6 @@
 /*
  DA-NRW Software Suite | ContentBroker
+ DA-NRW Software Suite | ContentBroker
  Copyright (C) 2013 Historisch-Kulturwissenschaftliche Informationsverarbeitung
  Universität zu Köln
 
@@ -19,106 +20,88 @@
 
 package de.uzk.hki.da.at;
 
-import java.io.File;
+import static org.junit.Assert.assertEquals;
+
 import java.io.IOException;
 
-import org.apache.commons.io.FileUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
 import de.uzk.hki.da.model.Object;
+import de.uzk.hki.da.utils.C;
 
 /**
  * Relates to AK-T/02 Ingest - Alternative Szenarien.
  * @author Daniel M. de Oliveira
  *
  */
-public class ATUseCaseIngestValidationNotPassed extends Base{
+public class ATUseCaseIngestValidationNotPassed extends UserErrorBase{
 
-	private String originalName = "ATUseCaseIngest1";
-	private String containerName = originalName+".tgz";
-	private Object object;
+	private static final String AT_EINE_DATEI_GELOESCHT = "ATEineDatei_geloescht";
+	private static final String AT_DUPLICATE_METADATA_FILES = "ATDuplicateMetadataFiles";
+	private static final String AT_INVALID_PREMIS = "ATInvalidPremis";
+	private static final String AT_ERSTE_ZEILE_TAGMANIFEST1_ZEICHENGEAENDERT = "ATErsteZeile_tagmanifest1Zeichengeaendert";
+	private static final String AT_MANIFEST_MD5_2FILESGEAENDERT = "ATManifestMd5_2filesgeaendert";
+	private static final String YEAH = "yeah!";
 	
+
 	@Before
 	public void setUp() throws IOException{
 		setUpBase();
 	}
 	
 	@After
-	public void tearDown() throws IOException{
+	public void tearDown(){
 		clearDB();
 		cleanStorage();
 	}
 	
+
 	
 	@Test
 	public void testFirst_tagmanifest1ZeichenChanged() throws Exception{
 		
-		originalName = "ATErsteZeile_tagmanifest1Zeichengeaendert";
-		containerName = originalName+".tgz";
-				
-		FileUtils.copyFileToDirectory(new File("src/test/resources/at/"+containerName), 
-				new File(ingestAreaRootPath+"TEST"));
-		waitForJobToBeInStatus(originalName,"114",2000);
-		object = fetchObjectFromDB(originalName);
-		System.out.println("objectIdentifier: "+object.getIdentifier());
-		
-		System.out.println("yeah!");
+		ingestAndWaitForErrorState(AT_ERSTE_ZEILE_TAGMANIFEST1_ZEICHENGEAENDERT, C.USER_ERROR_STATE_DIGIT);
+		System.out.println(YEAH);
 	}
-	
 	
 	@Test
 	public void testManifestMd5_2filesChanged() throws Exception{
 		
-		originalName = "ATManifestMd5_2filesgeaendert";
-		containerName = originalName+".tgz";
-				
-		FileUtils.copyFileToDirectory(new File("src/test/resources/at/"+containerName), 
-				new File(ingestAreaRootPath+"TEST"));
-		waitForJobToBeInStatus(originalName,"114",2000);
-		object = fetchObjectFromDB(originalName);
-		System.out.println("objectIdentifier: "+object.getIdentifier());
-		
-		System.out.println("yeah!");
+		ingestAndWaitForErrorState(AT_MANIFEST_MD5_2FILESGEAENDERT, C.USER_ERROR_STATE_DIGIT);
+		System.out.println(YEAH);
 	}
-	
-	
-	
 	
 	@Test
 	public void testOneFileDeleted() throws Exception{
 		
-		originalName = "ATEineDatei_geloescht";
-		containerName = originalName+".tgz";
-				
-		FileUtils.copyFileToDirectory(new File("src/test/resources/at/"+containerName), 
-				new File(ingestAreaRootPath+"TEST"));
-		waitForJobToBeInStatus(originalName,"114",2000);
-		object = fetchObjectFromDB(originalName);
-		System.out.println("objectIdentifier: "+object.getIdentifier());
-		
-		System.out.println("yeah!");
+		ingestAndWaitForErrorState(AT_EINE_DATEI_GELOESCHT, C.USER_ERROR_STATE_DIGIT);
+		System.out.println(YEAH);
 	}
-	
-	
-	
 	
 	@Test
 	public void testInvalidPremis() throws Exception{
 		
-		originalName = "ATInvalidPremis";
-		containerName = originalName+".zip";
-				
-		FileUtils.copyFileToDirectory(new File("src/test/resources/at/"+containerName), 
-				new File(ingestAreaRootPath+"TEST"));
-		waitForJobToBeInStatus(originalName,"114",2000);
-		object = fetchObjectFromDB(originalName);
-		System.out.println("objectIdentifier: "+object.getIdentifier());
-		
-		System.out.println("yeah!");
+		ingestAndWaitForErrorState(AT_INVALID_PREMIS, C.USER_ERROR_STATE_DIGIT,C.ZIP);
+		System.out.println(YEAH);
 	}
 	
+	@Test
+	public void testDuplicateMetadataFiles() throws IOException, InterruptedException{
+		
+		Object object = ingestAndWaitForErrorState(AT_DUPLICATE_METADATA_FILES,C.USER_ERROR_STATE_DIGIT);
+		System.out.println(YEAH);
+		
+		assertEquals(null,object.getPackage_type());
+		assertEquals(null,object.getMetadata_file());
+	}
+	
+	@Test
+	public void testDuplicateDocumentName() throws IOException, InterruptedException{
+		ingestAndWaitForErrorState("ATDuplicateDocumentName",C.USER_ERROR_STATE_DIGIT);
+		System.out.println(YEAH);
+	}
 	
 	
 	

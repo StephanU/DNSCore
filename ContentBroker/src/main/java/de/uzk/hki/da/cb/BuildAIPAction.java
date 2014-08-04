@@ -23,10 +23,10 @@ import java.io.File;
 import java.io.IOException;
 
 import org.apache.commons.io.FileUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import de.uzk.hki.da.utils.BagitUtils;
+import de.uzk.hki.da.utils.Path;
+import de.uzk.hki.da.utils.RelativePath;
 
 /**
  * <ol>
@@ -38,20 +38,18 @@ import de.uzk.hki.da.utils.BagitUtils;
  */
 public class BuildAIPAction extends AbstractAction {
 
-	static final Logger logger = LoggerFactory.getLogger(BuildAIPAction.class);
-	
 	@Override
 	boolean implementation() {
 
-		String relativePathOfSource = object.getContractor().getShort_name()+"/" + object.getIdentifier() +"/";
-		String physicalPackagePathOfSource = localNode.getWorkAreaRootPath() + "/" + relativePathOfSource;
+		Path relativePathOfSource = new RelativePath(object.getContractor().getShort_name(),object.getIdentifier());
+		Path physicalPackagePathOfSource = Path.make(localNode.getWorkAreaRootPath(),"work",relativePathOfSource);
 		
 		
 		
 		logger.info ( "Preparing AIP at \"" + physicalPackagePathOfSource +"\" for archival." );
 		deleteOldPremisFile();
 		deleteUnnecessaryReps(physicalPackagePathOfSource,job.getRep_name());		
-		BagitUtils.buildBagit ( physicalPackagePathOfSource );
+		BagitUtils.buildBagit ( physicalPackagePathOfSource.toString() );
 		
 		return true;
 	}
@@ -62,10 +60,10 @@ public class BuildAIPAction extends AbstractAction {
 		logger.debug("Deleting bagit files from source");
 		try{
 		
-			new File(object.getPath()+"bag-info.txt").delete();
-			new File(object.getPath()+"bagit.txt").delete();
-			new File(object.getPath()+"manifest-md5.txt").delete();
-			new File(object.getPath()+"tagmanifest-md5.txt").delete();
+			Path.make(object.getPath(),"bag-info.txt").toFile().delete();
+			Path.make(object.getPath(),"bagit.txt").toFile().delete();
+			Path.make(object.getPath(),"manifest-md5.txt").toFile().delete();
+			Path.make(object.getPath(),"tagmanifest-md5.txt").toFile().delete();
 		}catch(Exception e){
 			logger.error("Couldn't delete bagit files");
 		}
@@ -83,13 +81,14 @@ public class BuildAIPAction extends AbstractAction {
 	 * Logs on info level an entry for each representation destroyed.
 	 * @author Daniel M. de Oliveira
 	 */
-	void deleteUnnecessaryReps(String physicalPackagePathOfSource,String repName){
-		String children[] = new File(physicalPackagePathOfSource + "data").list();
+	void deleteUnnecessaryReps(Path physicalPackagePathOfSource,String repName){
+		
+		String children[] = Path.make(physicalPackagePathOfSource,"data").toFile().list();
 		for (int i=0;i<children.length;i++){
 			if (!children[i].contains(repName) &&
-					new File(physicalPackagePathOfSource+"data/"+children[i]).isDirectory()) {
+					Path.make(physicalPackagePathOfSource,"data",children[i]).toFile().isDirectory()) {
 				try {
-					FileUtils.deleteDirectory(new File(physicalPackagePathOfSource+"data/"+children[i]));
+					FileUtils.deleteDirectory(Path.make(physicalPackagePathOfSource,"data",children[i]).toFile());
 				} catch (IOException e) {
 					throw new RuntimeException("Couldn't delete folder: "+children[i]);
 				}
@@ -106,7 +105,7 @@ public class BuildAIPAction extends AbstractAction {
 	 */
 	void deleteOldPremisFile() {
 
-		File oldPremis = new File(object.getDataPath() + "premis_old.xml");
+		File oldPremis = Path.make(object.getDataPath(),"premis_old.xml").toFile();
 		
 		logger.debug("Deleting " + oldPremis.getAbsolutePath());
 				

@@ -21,6 +21,7 @@ package de.uzk.hki.da.cb;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -28,28 +29,38 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.io.filefilter.WildcardFileFilter;
 import org.apache.commons.io.input.BOMInputStream;
 import org.apache.commons.lang.NotImplementedException;
+import org.jdom.Attribute;
 import org.jdom.Document;
 import org.jdom.Element;
+import org.jdom.JDOMException;
+import org.jdom.Namespace;
 import org.jdom.input.SAXBuilder;
 import org.jdom.output.Format;
 import org.jdom.output.XMLOutputter;
+import org.jdom.xpath.XPath;
 
 import de.uzk.hki.da.core.ConfigurationException;
+import de.uzk.hki.da.core.UserException;
+import de.uzk.hki.da.core.UserException.UserExceptionId;
 import de.uzk.hki.da.metadata.XmpCollector;
-import de.uzk.hki.da.metadata.XsltGenerator;
+import de.uzk.hki.da.metadata.XsltEDMGenerator;
 import de.uzk.hki.da.model.DAFile;
 import de.uzk.hki.da.model.Event;
 import de.uzk.hki.da.model.Package;
-import de.uzk.hki.da.service.UpdateMetadataService;
+import de.uzk.hki.da.service.MimeTypeDetectionService;
+import de.uzk.hki.da.utils.Path;
+import de.uzk.hki.da.utils.XMLUtils;
 
 /**
  * Performs updates to metadata files that are necessary
@@ -66,21 +77,32 @@ import de.uzk.hki.da.service.UpdateMetadataService;
  *
  */
 public class UpdateMetadataAction extends AbstractAction {
-	
-	private UpdateMetadataService updateMetadataService;	
+
+	/** The namespaces. */
+	private Map<String,String> namespaces;
+	/** The xpaths to urls. */
+	private Map<String,String> xpathsToUrls = new HashMap<String,String>();
 	private boolean writePackageTypeToDC = false;	
 	private String[] repNames;	
 	private String absUrlPrefix;
 	private Map<String,String> dcMappings = new HashMap<String,String>();
+	
+	private MimeTypeDetectionService mtds = new MimeTypeDetectionService();
+	
+//	temporary
+	private static final Namespace METS_NS = Namespace.getNamespace("http://www.loc.gov/METS/");
+	private static final Namespace XLINK_NS = Namespace.getNamespace("http://www.w3.org/1999/xlink");
 
 	@Override
 	public boolean implementation() throws IOException {
-		if (job==null) throw new ConfigurationException("job not set");
-		if (actionCommunicatorService==null) throw new ConfigurationException("actionCommunicatorService not set");
-		if (updateMetadataService==null) throw new ConfigurationException("updateMetadataService not set");
 		
-		String packageType = (String) actionCommunicatorService.extractDataObject(job.getId(), "package_type");
-		String metadataFileName = (String) actionCommunicatorService.extractDataObject(job.getId(), "metadata_file");
+		this.setMtds(mtds);
+		
+		if (job==null) throw new ConfigurationException("job not set");
+		
+		String packageType = object.getPackage_type();
+		String metadataFileName = object.getMetadata_file();
+		
 		if (packageType == null || metadataFileName == null) {
 			logger.warn("Could not determine package type. No metadata to update.");
 			return true;
@@ -99,35 +121,219 @@ public class UpdateMetadataAction extends AbstractAction {
 			repNames = new String[]{ object.getNameOfNewestRep() };
 		}
 		
-		
-		if ("XMP".equals(packageType)) 
+		if ("XMP".equals(packageType)){
 			collectXMP();
-		else 
+			
+			for (String repName : getRepNames()) {
+				updatePathsInMetadata(
+						object.getLatestPackage(),
+						packageType,
+						metadataFileName,
+						repName,
+						absUrlPrefixFull
+						);
+			}
+		}
+		else{
 			metadataFileName = copyMetadataFileToNewReps(packageType,
 					metadataFileName);
-
-		for (String repName : getRepNames()) {
-			getUpdateMetadataService().updatePathsInMetadata(
-					object.getLatestPackage(),
-					packageType,
-					metadataFileName,
-					repName,
-					absUrlPrefixFull
-				);
+			
+			for (String repName : getRepNames()){
+				if ("EAD".equals(packageType))
+					updatePathsInEADStructure(
+						object.getLatestPackage(),metadataFileName,repName,absUrlPrefixFull);
+				else
+					updatePathsInMetadata(
+						object.getLatestPackage(),packageType,metadataFileName,repName,absUrlPrefixFull);
+			}
 		}
-		
 		
 		copyDCdatastreamFromMetadata(packageType, metadataFileName);
 		if (isWritePackageTypeToDC())
 			writePackageTypeToDC(packageType);
 		
-		
-		
-			
 		return true;
+	}
+	
+	/**
+	 * @param pkg
+	 * @param metadataFilePath
+	 * @param repName
+	 * @param absUrlPrefix
+	 * @throws JDOMException 
+	 * @throws IOException 
+	 */
+	private void updatePathsInEADStructure(
+			
+			Package pkg,
+			String metadataFilePath,
+			String repName,
+			String absUrlPrefix) 
+					throws IOException
+			{
 		
+		if (absUrlPrefix == null) absUrlPrefix = "";
+		
+		Map<String,DAFile> replacements = generateReplacementsMap(pkg, repName, absUrlPrefix);
+		
+		Set<DAFile> targetFiles = new HashSet<DAFile>();
+		Iterator it = replacements.entrySet().iterator();
+		while (it.hasNext()) {
+	        Map.Entry entry = (Map.Entry)it.next();
+	        targetFiles.add((DAFile)entry.getValue());
+	    }
+		
+		int expectedReplacements = targetFiles.size();
+		
+		File metadataFile = Path.makeFile(pkg.getTransientBackRefToObject().getDataPath(),repName,metadataFilePath);
+		if (!metadataFile.exists()) throw new FileNotFoundException();
+		
+		String xPathPath = xpathsToUrls.get("EAD");
+		logger.debug("xPathPath: "+xPathPath);
+		// replace paths in elements denoted by xpath
+		XPath xPath;
+		int actualReplacements = 0;
+		@SuppressWarnings("rawtypes")
+		List nodes = null;
+		
+		
+		try {
+			xPath = XPath.newInstance(xPathPath);
+
+	
+			FileInputStream fileInputStream;
+			fileInputStream = new FileInputStream(metadataFile);
+			BOMInputStream bomInputStream = new BOMInputStream(fileInputStream);
+		
+			for (String prefix : namespaces.keySet()) {
+				xPath.addNamespace(prefix, namespaces.get(prefix));
+			}
+			nodes = xPath.selectNodes(XMLUtils.createNonvalidatingSaxBuilder().build(bomInputStream));
+			if (nodes.size() == 0) {
+				logger.warn("XPath expression did not match any Element. No paths will be updated!");
+			}
+		} catch (JDOMException e) {throw new RuntimeException(e);}
+
+		try {
+			Map<String,DAFile> metsReplacements = new HashMap<String,DAFile>();
+			
+			for (Object node : nodes) {
+				logger.debug("Diving into EAD-node:"+node);
+				
+				Attribute attr = (Attribute) node;
+				
+				String value = attr.getValue();
+				
+				if (value.endsWith(".xml") || value.endsWith(".XML")) {
+				
+					actualReplacements+= updatePathsInFile(pkg, repName, value, xpathsToUrls.get("METS"), replacements);
+					
+					for (Event e:pkg.getEvents()) {
+						if(e.getType().equals("COPY") || e.getType().equals("CONVERT")) {
+							if(e.getSource_file().getRelative_path().contains(value)) {
+								metsReplacements.put(value, e.getTarget_file());
+							}
+						}
+					}
+				}
+			}
+			logger.debug("Planned mets replacements: {}", metsReplacements);
+			updatePathsInFile(pkg, repName, metadataFilePath, xPathPath, metsReplacements); // Updates of xml path in EAD file	
+			
+		} catch(Exception err) {
+			throw new UserException(UserExceptionId.REPLACE_URLS_IN_METADATA_ERROR,
+					"Could not replace file URLs in XML metadata.", metadataFilePath, err);
+		}
+		
+		if (expectedReplacements!=actualReplacements) {
+			throw new UserException(UserExceptionId.INCONSISTENT_PACKAGE,
+					expectedReplacements+" file(s) have been converted and for each one an entry in a METS file has to be updated. "+
+			"but only "+actualReplacements+" replacements could be done.", metadataFilePath, new Exception());
+		}
 	}
 
+
+	
+	
+	/**
+	 * Update paths in a packages metadata.
+	 *
+	 * @param pkg the current package
+	 * @param packageType the metadata type of the package
+	 * @param metadataFilePath the metadata file path
+	 * @param repName the representation affected
+	 * @param absUrlPrefix a prefix for generating absolute URLs, can be null
+	 * @throws IOException 
+	 */
+	private void updatePathsInMetadata(
+			Package pkg,
+			String packageType,
+			String metadataFilePath,
+			String repName,
+			String absUrlPrefix) throws IOException {
+		
+		if (absUrlPrefix == null) absUrlPrefix = "";
+		Map<String,DAFile> replacements = generateReplacementsMap(pkg, repName, absUrlPrefix);
+		
+		// replace paths in elements denoted by xpath
+		String xPathPath = xpathsToUrls.get(packageType);
+		logger.debug("xPathPath: "+xPathPath);
+		
+		updatePathsInFile(pkg, repName, metadataFilePath, xPathPath, replacements);			
+	}
+
+
+	private Map<String,DAFile> generateReplacementsMap(Package pkg,String repName,String absUrlPrefix) throws IOException{
+		
+		logger.debug("Generate replacements");
+		   
+		//  relativePath,DAFile
+		//  Mimetype, DAFile
+		Map<String,DAFile> replacements = new HashMap<String,DAFile>();
+		
+		// collect paths to be replaced in map
+		for (Event e:pkg.getEvents()) {
+		
+			logger.debug("Event type: "+e.getType());
+			
+			if (!"CONVERT".equals(e.getType())) {
+				continue;
+			} 
+			
+			DAFile targetFile = e.getTarget_file();
+			DAFile sourceFile = e.getSource_file();
+			logger.debug("source file: "+sourceFile.getRelative_path());
+			logger.debug("target file: "+targetFile.getRelative_path());
+			if (!targetFile.getRep_name().equals(repName)) {
+				logger.debug("!targetFile.getRep_name().equals(repName)");
+				logger.debug("targetFile.getRep_name(): "+targetFile.getRep_name());
+				logger.debug("repName: "+repName);
+				continue;
+			}
+//			MIMETYPE
+			String sourceMT = getMtds().detectMimeType(sourceFile);
+			logger.debug("Source mimetype: "+sourceMT);
+			targetFile.setMimeType(getMtds().detectMimeType(targetFile));
+			logger.debug("Target file MIMETYPE: "+targetFile.getMimeType());
+			
+			logger.debug("Put "+sourceFile.getRelative_path()+" | "+targetFile);
+			replacements.put(sourceFile.getRelative_path(), targetFile);
+//			MIMETYPE temporary put the same targetFile again! The goal is to have just two DAFiles in the HashMap (replacements.put(sourceFile, targetFile))
+			replacements.put(sourceMT, targetFile);
+			logger.debug("Put "+sourceMT+" | "+targetFile);
+		}
+		
+		logger.debug("Planned replacements: {}", replacements);
+		
+		return replacements;
+	}
+	
+	private void updateLoctypeInMetsFile(Element fileElement, String newLoctype) {
+		
+		fileElement.removeAttribute("LOCTYPE");
+		fileElement.setAttribute("LOCTYPE", newLoctype);
+	}
+	
 	/**
 	 * @param packageType
 	 * @param metadataFileName
@@ -139,14 +345,15 @@ public class UpdateMetadataAction extends AbstractAction {
 		// copy other metadata to rep(s)
 		DAFile srcMetadataFile = object.getLatest(metadataFileName);
 		String extension = FilenameUtils.getExtension(srcMetadataFile.toRegularFile().getName());
+		
 		for (String repName : getRepNames()) {
 			// rename metadatafile for presentation
 			if (repName.startsWith("dip")) {
 				metadataFileName = packageType + "." + extension;
 			}
-			File destFile = new File(object.getDataPath() + repName + "/" // XXX same problem with subdirs as above? Daniel M. de Oliveira
+			
+			File destFile = new File(object.getDataPath() + "/" + repName + "/" // XXX same problem with subdirs as above? Daniel M. de Oliveira
 					+ metadataFileName);
-
 			FileUtils.copyFile(srcMetadataFile.toRegularFile(), destFile);
 			DAFile destMetadataFile = new DAFile(object.getLatestPackage(), repName, metadataFileName);
 			destMetadataFile.setFormatPUID(srcMetadataFile.getFormatPUID());
@@ -162,7 +369,8 @@ public class UpdateMetadataAction extends AbstractAction {
 			object.getLatestPackage().getEvents().add(e);
 			
 			logger.debug("Copied metadata file \"{}\" to \"{}\"", srcMetadataFile.toString(), destMetadataFile);
-			actionCommunicatorService.addDataObject(job.getId(), "metadata_file", metadataFileName);
+			
+			object.setMetadata_file(metadataFileName);
 			
 			// copy METS-Files if present in EAD-package
 			if ("EAD".equals(packageType)) {
@@ -171,7 +379,130 @@ public class UpdateMetadataAction extends AbstractAction {
 		}
 		return metadataFileName;
 	}
+	
+	/**
+	 * Update paths in file.
+	 *
+	 * @param pkg the pkg
+	 * @param repName the rep name
+	 * @param metadataFilePath the metadata file path
+	 * @param xPathPath the x path path
+	 * @param replacements the replacements
+	 */
+	private int updatePathsInFile(
+			Package pkg,
+			String repName,
+			String metadataFilePath,
+			String xPathPath,
+			Map<String,DAFile> replacements
+	) {
+		
+		logger.debug("Check file for paths to replace: "+metadataFilePath);
+		logger.debug("Planned replacements: {}", replacements);
+		
+		try {
+			
+			SAXBuilder builder = XMLUtils.createNonvalidatingSaxBuilder();
+			File metadataFile = Path.make(pkg.getTransientBackRefToObject().getDataPath(),repName,metadataFilePath).toFile();
+			
+			FileInputStream fileInputStream = new FileInputStream(metadataFile);
+			BOMInputStream bomInputStream = new BOMInputStream(fileInputStream);
 
+			Document doc = builder.build(bomInputStream);
+			
+			XPath xPath = XPath.newInstance(xPathPath);
+			for (String prefix : namespaces.keySet()) {
+				xPath.addNamespace(prefix, namespaces.get(prefix));
+			}
+			@SuppressWarnings("rawtypes")
+			List allNodes = xPath.selectNodes(doc);
+			List nodes = new ArrayList<Object>();
+			logger.debug("allNodes.size(): "+allNodes.size());
+			for(Object i: allNodes) {
+				try {
+					Element element = (Element) i;
+					String xmlURI = element.getNamespaceURI();
+					if(xmlURI.toUpperCase().contains("LIDO")) {
+						nodes = allNodes;
+					} else {
+						try {
+						Attribute attr = element.getChild("FLocat", METS_NS).getAttribute("href", XLINK_NS);
+						nodes.add(attr);
+						
+						Attribute attrMT = element.getAttribute("MIMETYPE");
+						nodes.add(attrMT);
+						if(!(absUrlPrefix==null)) {
+							Element FLocat = element.getChild("FLocat", METS_NS);
+							updateLoctypeInMetsFile(FLocat, "URL");
+						}
+						
+						} catch (Exception e) { // swallow exception if cast not succesfull
+						}
+					} 
+				} catch (Exception e) {
+//					EAD or XMP
+					nodes = allNodes;
+				}	
+			}
+			
+			int entitiesReplaced = 0;
+			for (Object node : nodes) {
+				logger.debug("NODE: "+node);
+				String targetValue = null;
+				if (node instanceof Attribute) {
+					Attribute attr = (Attribute) node;
+					String value = attr.getValue();
+					if (replacements.containsKey(value)) {	
+						if(attr.getName().equals("MIMETYPE")) {
+							targetValue = replacements.get(value).getMimeType();
+						} 
+						else {
+							if(isLZA()) {
+								targetValue = replacements.get(value).getRelative_path();
+							} else {
+								targetValue = absUrlPrefix + File.separator + object.getIdentifier() + File.separator + replacements.get(value).getRelative_path();
+							}
+							entitiesReplaced++;
+						}
+						logger.debug("-- Replacing attribute \"{}\" with \"{}\"", attr.getValue(),targetValue);
+						attr.setValue(targetValue);
+					}
+				} else if (node instanceof Element) {
+//					LIDO
+					Element elem = (Element) node;
+					String value = elem.getText();
+					
+					if (replacements.containsKey(value)) {
+						if(isLZA()) {
+							targetValue = replacements.get(value).getRelative_path();
+						} else {
+							targetValue = absUrlPrefix + File.separator + object.getIdentifier() + File.separator + replacements.get(value).getRelative_path();
+						}
+						if (replacements.containsKey(value)) {
+							logger.debug("-- Replacing element \"{}\" with \"{}\"", elem.getValue(),replacements.get(value));
+							elem.setText(targetValue);
+							entitiesReplaced++;
+						}
+					}
+				}
+			}
+			if ((nodes.size() == 0)||(entitiesReplaced == 0 )) {
+				logger.warn("XPath expression did not match any Element. No paths will be updated!");
+				return 0;
+			}
+			
+			XMLOutputter outputter = new XMLOutputter();
+			outputter.setFormat(Format.getPrettyFormat());
+			outputter.output(doc, new FileWriter(metadataFile));
+			
+			return entitiesReplaced;
+			
+		} catch (Exception err) {
+			throw new UserException(UserExceptionId.REPLACE_URLS_IN_METADATA_ERROR,
+					"Could not replace file URLs in XML metadata.", metadataFilePath, err);
+		}
+	}
+	
 	/**
 	 * @param packageType
 	 * @param metadataFile
@@ -186,11 +517,11 @@ public class UpdateMetadataAction extends AbstractAction {
 			try {
 				for (String repName : getRepNames()) {
 					if (!repName.startsWith("dip")) continue;
-					FileInputStream inputStream = new FileInputStream(object.getDataPath() + repName + "/" + metadataFile);
+					FileInputStream inputStream = new FileInputStream(Path.make(object.getDataPath(),repName,metadataFile).toString());
 					BOMInputStream bomInputStream = new BOMInputStream(inputStream);
-					XsltGenerator xsltGenerator = new XsltGenerator(xsltFile, bomInputStream);
+					XsltEDMGenerator xsltGenerator = new XsltEDMGenerator(xsltFile, bomInputStream);
 					String result = xsltGenerator.generate();
-					File file = new File(object.getDataPath() + repName + "/DC.xml");
+					File file = new File(object.getDataPath() + "/"+repName + "/DC.xml");
 					if (!file.exists()) file.createNewFile();
 					FileOutputStream outputStream = new FileOutputStream(file);
 					outputStream.write(result.getBytes("utf-8"));
@@ -208,44 +539,69 @@ public class UpdateMetadataAction extends AbstractAction {
 	 * @param repName
 	 * @throws IOException
 	 */
-	private void copyXMLsToNewRepresentation(File srcFile, String repName)
+	
+	private void copyXMLsToNewRepresentation(File srcFile, String repName) 
 			throws IOException {
-		File destDir = new File(object.getDataPath() + repName);
+		
 		Iterator<File> xmlFiles = FileUtils.iterateFiles(
 				srcFile.getParentFile(), new WildcardFileFilter("*.xml"), null);
-		int count=0;
-		while (xmlFiles.hasNext()) {
-			count++;
+		
+		File destDir = null;
+		
+//		Implementierung für beliebige Baumtiefe steht noch aus!
+		
+		File[] subDirs = srcFile.getParentFile().listFiles();
+		
+		for(int file=-1; file<subDirs.length; file++) {
 			
-			File xmlFile = xmlFiles.next();
-			FileUtils.copyFileToDirectory(xmlFile, destDir);
-			
-			String destFilePath = destDir.getAbsolutePath() + "/" + xmlFile.getName();							
-			String xmlFileRelativePath = destFilePath.replace(object.getDataPath() + repName + "/", "");
-			DAFile daFile = new DAFile(object.getLatestPackage(), repName, xmlFileRelativePath);
-										
-			Event e = new Event();							
-			for (Package p : object.getPackages()) {
-				for (DAFile f : p.getFiles()) {
-					if (xmlFile.getAbsolutePath()
-							.equals(f.toRegularFile().getAbsolutePath())) {
-						e.setSource_file(f);
-						daFile.setFormatPUID(f.getFormatPUID());
-					}
+			if(file==-1) {
+				destDir = new File(object.getDataPath() +"/"+ repName);
+			} else {
+				File currentFile = subDirs[file];
+				if(currentFile.isDirectory()) {
+					destDir = new File(Path.make(object.getDataPath(), repName, currentFile.getName()).toString());
+					xmlFiles = FileUtils.iterateFiles(
+							currentFile, new WildcardFileFilter("*.xml"), null);
 				}
-			}							
+			}
 			
-			object.getLatestPackage().getFiles().add(daFile);
-			
-			e.setTarget_file(daFile);
-			e.setType("COPY");
-			e.setDate(new Date());
-			e.setAgent_type("NODE");
-			e.setAgent_name(object.getTransientNodeRef().getName());							
-			object.getLatestPackage().getEvents().add(e);
+			int count=0;
+			while (xmlFiles.hasNext()) {
+				count++;
+				
+				File xmlFile = xmlFiles.next();
+				FileUtils.copyFileToDirectory(xmlFile, destDir);
+				
+				String destFilePath = Path.make(destDir.getAbsolutePath(), xmlFile.getName()).toString();						
+				String xmlFileRelativePath = destFilePath.replace(object.getDataPath() +"/"+ repName + "/", "");
+				DAFile daFile = new DAFile(object.getLatestPackage(), repName, xmlFileRelativePath);
+											
+				Event e = new Event();							
+				for (Package p : object.getPackages()) {
+					for (DAFile f : p.getFiles()) {
+						if (xmlFile.getAbsolutePath()
+								.equals(f.toRegularFile().getAbsolutePath())) {
+							e.setSource_file(f);
+							daFile.setFormatPUID(f.getFormatPUID());
+						}
+					}
+				}							
+				
+				object.getLatestPackage().getFiles().add(daFile);
+				
+				e.setTarget_file(daFile);
+				e.setType("COPY");
+				e.setDate(new Date());
+				e.setAgent_type("NODE");
+				e.setAgent_name(object.getTransientNodeRef().getName());							
+				object.getLatestPackage().getEvents().add(e);
+			}
+			logger.debug("Copied "+count+ " *.xml files to new representation (package is of type EAD)");	
 		}
-		logger.debug("Copied "+count+ " *.xml files to new representation (package is of type EAD)");
 	}
+	
+	
+
 
 	/**
 	 * Copy xmp sidecar files and collect them into one "XMP manifest"
@@ -259,7 +615,7 @@ public class UpdateMetadataAction extends AbstractAction {
 		Map<DAFile,DAFile> copyCommands = new HashMap<DAFile,DAFile>();
 		for (String repName : getRepNames()) {
 			logger.debug("looking for xmp files in rep {}", repName);
-			String repPath = object.getDataPath() + repName;
+			String repPath = Path.make(object.getDataPath(),repName).toString();
 			File repDir = new File(repPath);
 			if (!repDir.exists()) {
 				logger.info("representation directory {} does not exist. Skipping ...", repPath);
@@ -370,7 +726,7 @@ public class UpdateMetadataAction extends AbstractAction {
 		
 		if (packageType != null) {
 			for (String repName : getRepNames()) {
-				File file = new File(object.getDataPath() + repName + "/DC.xml");
+				File file = Path.make(object.getDataPath(),repName,"DC.xml").toFile();
 				if (file.exists()) {
 					try {
 						FileInputStream inputStream = new FileInputStream(file);
@@ -388,7 +744,7 @@ public class UpdateMetadataAction extends AbstractAction {
 					logger.warn("Unable to locate DC file, creating one ...");
 					Document doc = new Document();
 					doc.setRootElement(new Element("dc", "oai_dc", "http://www.openarchives.org/OAI/2.0/oai_dc/"));
-					String dcPath = object.getDataPath() + repName + "/DC.xml";
+					String dcPath = object.getDataPath() +"/"+ repName + "/DC.xml";
 					writeDCForDIP(doc, packageType, dcPath);
 				}
 			}
@@ -412,22 +768,6 @@ public class UpdateMetadataAction extends AbstractAction {
 	@Override
 	void rollback() throws Exception {
 		throw new NotImplementedException("No rollback implemented for this action");
-	}
-
-	/**
-	 * Gets the update metadata service
-	 * @return the service
-	 */
-	public UpdateMetadataService getUpdateMetadataService() {
-		return updateMetadataService;
-	}
-
-	/**
-	 * Gets the update metadata service
-	 * @param the service
-	 */
-	public void setUpdateMetadataService(UpdateMetadataService updateMetadataService) {
-		this.updateMetadataService = updateMetadataService;
 	}
 
 	/**
@@ -502,6 +842,58 @@ public class UpdateMetadataAction extends AbstractAction {
 	 */
 	public void setDcMappings(Map<String,String> dcMappings) {
 		this.dcMappings = dcMappings;
+	}
+	
+	/**
+	 * Gets the xpaths to urls.
+	 *
+	 * @return the xpaths to urls
+	 */
+	public Map<String,String> getXpathsToUrls() {
+		return xpathsToUrls;
+	}
+
+	/**
+	 * Sets the xpaths to urls.
+	 *
+	 * @param xpathsToUrls the xpaths to urls
+	 */
+	public void setXpathsToUrls(Map<String,String> xpathsToUrls) {
+		this.xpathsToUrls = xpathsToUrls;
+	}
+
+	/**
+	 * Gets the namespaces.
+	 *
+	 * @return the namespaces
+	 */
+	public Map<String,String> getNamespaces() {
+		return namespaces;
+	}
+
+	/**
+	 * Sets the namespaces.
+	 *
+	 * @param namespaces the namespaces
+	 */
+	public void setNamespaces(Map<String,String> namespaces) {
+		this.namespaces = namespaces;
+	}
+
+	public MimeTypeDetectionService getMtds() {
+		return mtds;
+	}
+
+	public void setMtds(MimeTypeDetectionService mtds) {
+		this.mtds = mtds;
+	}
+	
+	public boolean isLZA() {
+		if(absUrlPrefix==null) {
+			return true;
+		} else {
+			return false;
+		}
 	}
 
 }

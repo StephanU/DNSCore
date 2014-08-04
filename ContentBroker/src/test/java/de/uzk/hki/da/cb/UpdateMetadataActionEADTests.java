@@ -19,9 +19,13 @@
 
 package de.uzk.hki.da.cb;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import static org.mockito.Matchers.anyObject;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
-import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.HashMap;
@@ -34,75 +38,84 @@ import org.jdom.Namespace;
 import org.jdom.input.SAXBuilder;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
-import de.uzk.hki.da.core.ActionCommunicatorService;
+import de.uzk.hki.da.core.UserException;
 import de.uzk.hki.da.model.DAFile;
 import de.uzk.hki.da.model.Event;
 import de.uzk.hki.da.model.Job;
 import de.uzk.hki.da.model.Object;
-import de.uzk.hki.da.service.UpdateMetadataService;
+import de.uzk.hki.da.service.MimeTypeDetectionService;
+import de.uzk.hki.da.utils.Path;
+import de.uzk.hki.da.utils.RelativePath;
 import de.uzk.hki.da.utils.TESTHelper;
 
 /**
  * @author Daniel M. de Oliveira
+ * @author jpeters
  */
 public class UpdateMetadataActionEADTests {
-
+	
+	private static MimeTypeDetectionService mtds;
 	private static final Namespace METS_NS = Namespace.getNamespace("http://www.loc.gov/METS/");
 	private static final Namespace XLINK_NS = Namespace.getNamespace("http://www.w3.org/1999/xlink");
-	private static final String basePath = "src/test/resources/cb/UpdateMetadataActionEADTests/";
+	private static final Path workAreaRootPathPath = new RelativePath("src/test/resources/cb/UpdateMetadataActionEADTests/");
 	private static final UpdateMetadataAction action = new UpdateMetadataAction();
+	private Event event;
+	private Object object;
+	
+	@BeforeClass
+	public static void mockDca() throws IOException {
+		mtds = mock(MimeTypeDetectionService.class);
+		when(mtds.detectMimeType((DAFile)anyObject())).thenReturn("image/tiff");
+	}
 	
 	@Before
 	public void setUp() throws IOException{
-		Object obj = TESTHelper.setUpObject("42",basePath);
+		object = TESTHelper.setUpObject("42",workAreaRootPathPath);
 
-		FileUtils.copyFileToDirectory(new File(basePath+"src/mets_2_99.xml"), new File(basePath+"TEST/42/data/a/"));
-		FileUtils.copyFileToDirectory(new File(basePath+"src/vda3.XML"), new File(basePath+"TEST/42/data/a/"));
-		DAFile f1 = new DAFile(obj.getLatestPackage(),"a","mets_2_99.xml");
-		obj.getLatestPackage().getFiles().add(f1);
-		DAFile f3 = new DAFile(obj.getLatestPackage(),"a","vda3.XML");
-		obj.getLatestPackage().getFiles().add(f3);
+		FileUtils.copyFileToDirectory(Path.make(workAreaRootPathPath,"work/src/mets_2_99.xml").toFile(), Path.make(workAreaRootPathPath,"work/TEST/42/data/a/").toFile());
+		FileUtils.copyFileToDirectory(Path.make(workAreaRootPathPath,"work/src/vda3.XML").toFile(), Path.make(workAreaRootPathPath,"work/TEST/42/data/a/").toFile());
+		DAFile f1 = new DAFile(object.getLatestPackage(),"a","mets_2_99.xml");
+		object.getLatestPackage().getFiles().add(f1);
+		DAFile f3 = new DAFile(object.getLatestPackage(),"a","vda3.XML");
+		object.getLatestPackage().getFiles().add(f3);
 		
-		Event e1 = new Event();
-		e1.setSource_file(new DAFile(obj.getLatestPackage(),"a","ALVR_Nr_4547_Aufn_067.tif"));
-		e1.setTarget_file(new DAFile(obj.getLatestPackage(),"b","renamed067.tif"));
-		e1.setType("CONVERT");
-		obj.getLatestPackage().getEvents().add(e1);
+		event = new Event();
+		event.setSource_file(new DAFile(object.getLatestPackage(),"a","ALVR_Nr_4547_Aufn_067.tif"));
+		event.setTarget_file(new DAFile(object.getLatestPackage(),"b","renamed067.tif"));
+		event.setType("CONVERT");
+		object.getLatestPackage().getEvents().add(event);
 		
+		Job job = new Job(); job.setObject(object); job.setId(1);
+		object.setPackage_type("EAD");
+		object.setMetadata_file("vda3.XML");
 		
-		
-		Job job = new Job(); job.setObject(obj); job.setId(1);
-		ActionCommunicatorService acs = new ActionCommunicatorService();
-		acs.addDataObject(1, "package_type", "EAD");
-		acs.addDataObject(1, "metadata_file", "vda3.XML");
-		
-		UpdateMetadataService service = new UpdateMetadataService();
 		HashMap<String,String> xpaths = new HashMap<String,String>();
-		xpaths.put("METS", "//mets:FLocat/@xlink:href");
+		xpaths.put("METS", "//mets:file");
 		xpaths.put("EAD", "//daoloc/@href");
-		service.setXpathsToUrls(xpaths);
+		action.setXpathsToUrls(xpaths);
 		HashMap<String, String> nsMap = new HashMap<String,String>();
 		nsMap.put("mets", METS_NS.getURI());
 		nsMap.put("xlink", XLINK_NS.getURI());
-		service.setNamespaces(nsMap);
-		action.setUpdateMetadataService(service);
+		action.setNamespaces(nsMap);
+		action.setAbsUrlPrefix("http://data.danrw.de/file");
 		Map<String, String> dcMappings = new HashMap<String,String>();
 		dcMappings.put("EAD", "conf/xslt/dc/ead_to_dc.xsl");
 		action.setDcMappings(dcMappings);
 		
-		action.setActionCommunicatorService(acs);
-		action.setObject(obj);
+		action.setMtds(mtds);
+		action.setObject(object);
 		action.setJob(job);
 	}
 	
 	@After 
 	public void tearDown(){
-		new File(basePath+"TEST/42/data/a/mets_2_99.xml").delete();
-		new File(basePath+"TEST/42/data/a/vda3.XML").delete();
-		new File(basePath+"TEST/42/data/b/mets_2_99.xml").delete();
-		new File(basePath+"TEST/42/data/b/vda3.XML").delete();
+		Path.makeFile(workAreaRootPathPath,"work/TEST/42/data/a/mets_2_99.xml").delete();
+		Path.makeFile(workAreaRootPathPath,"work/TEST/42/data/a/vda3.XML").delete();
+		Path.makeFile(workAreaRootPathPath,"work/TEST/42/data/b/mets_2_99.xml").delete();
+		Path.makeFile(workAreaRootPathPath,"work/TEST/42/data/b/vda3.XML").delete();
 	}
 	
 	
@@ -112,16 +125,33 @@ public class UpdateMetadataActionEADTests {
 		action.implementation();
 		
 		SAXBuilder builder = new SAXBuilder();
-		Document doc = builder.build(new FileReader(new File(basePath + "TEST/42/data/b/mets_2_99.xml")));
+		Document doc = builder.build(new FileReader(Path.make(workAreaRootPathPath,"work/TEST/42/data/b/mets_2_99.xml").toFile()));
 
-		String url = doc.getRootElement()
+		assertEquals("http://data.danrw.de/file/42/renamed067.tif", getURL(doc));
+		System.out.println("DC: "+action.getDcMappings());
+	}
+	
+	
+	
+	@Test
+	public void upperLowerCaseMismatch() throws IOException, JDOMException {
+		event.setSource_file(new DAFile(object.getLatestPackage(),"a","alvr_Nr_4547_Aufn_067.tif"));
+		
+		try{
+			action.implementation();
+			fail();
+		}catch(UserException e){
+			assertTrue(e.getMessage().contains("but only"));
+		}
+	}
+	
+	private String getURL(Document doc){
+		
+		return doc.getRootElement()
 				.getChild("fileSec", METS_NS)
 				.getChild("fileGrp", METS_NS)
 				.getChild("file", METS_NS)
 				.getChild("FLocat", METS_NS)
 				.getAttributeValue("href", XLINK_NS);
-		
-		assertEquals("renamed067.tif", url);
 	}
-
 }

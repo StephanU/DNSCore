@@ -25,11 +25,8 @@ import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import de.uzk.hki.da.convert.ConverterService;
 import de.uzk.hki.da.core.ConfigurationException;
+import de.uzk.hki.da.format.ConverterService;
 import de.uzk.hki.da.grid.DistributedConversionAdapter;
 import de.uzk.hki.da.metadata.PremisXmlReader;
 import de.uzk.hki.da.model.DAFile;
@@ -47,7 +44,6 @@ import de.uzk.hki.da.model.Object;
  */
 public class ConvertAction extends AbstractAction {
 	
-	static final Logger logger = LoggerFactory.getLogger(ConvertAction.class);
 	private DistributedConversionAdapter distributedConversionAdapter;
 	
 	private List<Event> localConversionEvents;
@@ -114,7 +110,7 @@ public class ConvertAction extends AbstractAction {
 			
 			for (Job j:friendJobs){
 				j = dao.refreshJob(j); // little trick to get the tests work ( j = )
-				logger.info("Job on "+j.getInitial_node()+" is in status "+j.getStatus());
+				logger.info("Job on "+j.getResponsibleNodeName()+" is in status "+j.getStatus());
 				if (j.getStatus().equals("581")) throw new RuntimeException(
 						"Error in friend job encountered");
 				if (!j.getStatus().equals("590")) allJobsReady = false;

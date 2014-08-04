@@ -6,9 +6,9 @@ import java.io.IOException;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang.NotImplementedException;
 
-import de.uzk.hki.da.convert.JhoveScanService;
+import de.uzk.hki.da.format.JhoveScanService;
 import de.uzk.hki.da.model.Package;
-import de.uzk.hki.da.utils.Utilities;
+import de.uzk.hki.da.utils.Path;
 
 /**
  * 
@@ -23,7 +23,7 @@ public class RestartIngestWorkflowAction extends AbstractAction {
 	@Override
 	boolean implementation() {
 		
-		if (!object.hasDeltas())
+		if (!object.isDelta())
 			object.setUrn(null);
 		
 		deleteAIPTarFile();
@@ -36,9 +36,9 @@ public class RestartIngestWorkflowAction extends AbstractAction {
 		pkg.getEvents().clear();
 		pkg.getFiles().clear();
 		
-		String[] repNames = new File(object.getDataPath()).list();
+		String[] repNames = object.getDataPath().toFile().list();
 		for (String repName : repNames) {
-			if (new File(Utilities.slashize(object.getDataPath()) + repName).isDirectory())
+			if (Path.make(object.getDataPath(),repName).toFile().isDirectory())
 				pkg.scanRepRecursively(repName);
 		}
 		
@@ -72,7 +72,7 @@ public class RestartIngestWorkflowAction extends AbstractAction {
 	 */
 	private void cleanDataFolder() {
 		
-		File dataFolder = new File(object.getDataPath());
+		File dataFolder = object.getDataPath().toFile();
 		File newestBRepFolder = new File(dataFolder, object.getNameOfNewestARep().replace("+a", "+b"));
 		File dipFolder = new File(dataFolder, "dip");
 		
@@ -100,9 +100,9 @@ public class RestartIngestWorkflowAction extends AbstractAction {
 	 * @author Thomas Kleinke
 	 */
 	private void deleteDips() {
-		File publicDipFolder = new File(localNode.getDipAreaRootPath() + "public/" +
+		File publicDipFolder = new File(localNode.getWorkAreaRootPath() + "pips/public/" +
 			object.getContractor().getShort_name() + "/" + object.getIdentifier() + "_" + object.getLatestPackage().getId());
-		File institutionDipFolder = new File(localNode.getDipAreaRootPath() + "institution/" +
+		File institutionDipFolder = new File(localNode.getWorkAreaRootPath() + "pips/institution/" +
 				object.getContractor().getShort_name() + "/" + object.getIdentifier() + "_" + object.getLatestPackage().getId());
 		
 		if (publicDipFolder.exists()) {

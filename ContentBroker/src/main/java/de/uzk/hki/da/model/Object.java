@@ -47,6 +47,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import de.uzk.hki.da.model.PublicationRight.Audience;
+import de.uzk.hki.da.utils.Path;
 import de.uzk.hki.da.utils.Utilities;
 
 
@@ -88,13 +89,23 @@ public class Object {
 	/** The date_modified. */
 	private String date_modified;
 	
+	private String package_type;
+	
+	private String metadata_file;
+	
 	/** The zone. */
 	private String zone;
 	
 	/** The published_flag. */
 	private int published_flag;
 	
-	/** The object_state. */
+	/** The object_state. 
+	 *
+	 * 100: archived and valid
+	 * 51: corrupt
+	 * 50: in workflow
+	 * 60: under integrity check
+	 */
 	private int object_state;
 	
 	/** The last_checked. */
@@ -291,29 +302,28 @@ public class Object {
 	}
 	
 	/**
-	 * Gets the data path.
-	 *
-	 * @return the data path
+	 * @return physical path to package's data path on local node's working resource
+	 * @throws IllegalStateException if reference to particular node is not set.
+	 * @throws IllegalStateException if workAreaRoot path of the referenced node is null or empty.
+	 * @author Daniel M. de Oliveira
 	 */
-	public String getDataPath(){
-		if (transientNodeRef==null) throw new RuntimeException("node is null");
-		if (transientNodeRef.getWorkAreaRootPath()==null||transientNodeRef.getWorkAreaRootPath().isEmpty()) 
-			throw new RuntimeException("workarearootpath null or empty");
-		
-		return transientNodeRef.getWorkAreaRootPath() + contractor.getShort_name() + "/" + identifier + "/data/";
+	public Path getDataPath(){
+		return Path.make(getPath(),"data");
 	}
 	
 	
 	/**
-	 * Absolute path to the package on local nodes working resource.
-	 * @return the path
+	 * @return physical path to package on local node's working resource
+	 * @throws IllegalStateException if reference to particular node is not set.
+	 * @throws IllegalStateException if workAreaRoot path of the referenced node is null or empty.
+	 * @author Daniel M. de Oliveira
 	 */
-	public String getPath(){
-		if (transientNodeRef==null) throw new RuntimeException("node is null");
-		if (transientNodeRef.getWorkAreaRootPath()==null||transientNodeRef.getWorkAreaRootPath().isEmpty()) 
-			throw new RuntimeException("workarearootpath null or empty");
+	public Path getPath(){
+		if (transientNodeRef==null) throw new IllegalStateException("Object is not related to any particular node. So the physical path cannot be calculated.");
+		if (transientNodeRef.getWorkAreaRootPath()==null||transientNodeRef.getWorkAreaRootPath().toString().isEmpty()) 
+			throw new IllegalStateException("WorkAreaRootPath of related object is null or empty. Physical path cannot be calculated");
 		
-		return transientNodeRef.getWorkAreaRootPath() + contractor.getShort_name() + "/" + identifier + "/";
+		return Path.make(transientNodeRef.getWorkAreaRootPath(),"work",contractor.getShort_name(),identifier);
 	}
 	
 	
@@ -382,6 +392,7 @@ public class Object {
 	public void setContractor(Contractor contractor) {
 		this.contractor = contractor;
 	}
+	
 	
 	/**
 	 * Gets the contractor.
@@ -569,7 +580,7 @@ public class Object {
 	 * @author Thomas Kleinke
 	 * @return true if the object has deltas, otherwise false
 	 */
-	public boolean hasDeltas() {
+	public boolean isDelta() {
 		return (packages.size() > 1);
 	}
 	
@@ -617,7 +628,7 @@ public class Object {
 	{
 		Map<String, DAFile> fileMap = new HashMap<String, DAFile>();
 			
-		File mainFolder = new File(getDataPath());
+		File mainFolder = getDataPath().toFile();
 		if ((!mainFolder.exists())||((mainFolder.listFiles().length == 0)))
 			throw new RuntimeException("Folder " + mainFolder.getAbsolutePath() +
 									   " is empty or does not exist!");	
@@ -745,7 +756,7 @@ public class Object {
 	 * @author daniel
 	 */
 	public String getNameOfNewestRep(){
-		String[] files = new File(getDataPath()).list();
+		String[] files = getDataPath().toFile().list();
 		Arrays.sort(files);
 		
 		List<String> list = new ArrayList<String>();
@@ -753,7 +764,6 @@ public class Object {
 			if (!f.startsWith("dip") && !f.startsWith("premis"))
 				list.add(f); 
 		}
-		
 		return list.get(list.size()-1);
 	}
 	
@@ -766,7 +776,8 @@ public class Object {
 	 * @author Thomas Kleinke
 	 */
 	public String getNameOfNewestARep(){
-		String[] files = new File(getDataPath()).list();
+		
+		String[] files = getDataPath().toFile().list();
 		Arrays.sort(files);
 		
 		List<String> list = new ArrayList<String>();
@@ -787,7 +798,7 @@ public class Object {
 	 * @author Thomas Kleinke
 	 */
 	public String getNameOfNewestBRep(){
-		String[] files = new File(getDataPath()).list();
+		String[] files = getDataPath().toFile().list();
 		Arrays.sort(files);
 		
 		List<String> list = new ArrayList<String>();
@@ -814,13 +825,12 @@ public class Object {
 	 */
 	public DAFile getLatest(String filename) {
 		
-		
-		File[] representations = new File(getDataPath()).listFiles();
+		File[] representations = getDataPath().toFile().listFiles();
 		Arrays.sort(representations);
 		
 		DAFile result = null;
 		for (File rep : representations) {
-			if (new File(getDataPath()+rep.getName()+"/"+filename).exists()){
+			if (new File(getDataPath()+"/"+rep.getName()+"/"+filename).exists()){
 
 				for (Package p:this.getPackages())
 					for (DAFile f:p.getFiles()){
@@ -839,13 +849,17 @@ public class Object {
 	/**
 	 * Gets the latest package.
 	 *
-	 * @return the newest package which is attached to the object
+	 * @return the newest package which is attached to the object.
+	 * @throws IllegalStateException if there are no packages associated to the object.
+	 * 
 	 * @author Daniel M. de Oliveira
 	 */
 	public Package getLatestPackage(){
+		if (getPackages().size()==0) throw new IllegalStateException("no packages associated");
+
 		Package max = null;
-		
 		int maxnumber=0;
+		
 		for (Package p:getPackages()){
 			if (Integer.parseInt(p.getName())>maxnumber){
 				maxnumber = Integer.parseInt(p.getName());
@@ -899,5 +913,21 @@ public class Object {
 			p.setTransientBackRefToObject(this);
 			p.reattachPaths();
 		}
+	}
+
+	public String getPackage_type() {
+		return package_type;
+	}
+
+	public void setPackage_type(String package_type) {
+		this.package_type = package_type;
+	}
+
+	public String getMetadata_file() {
+		return metadata_file;
+	}
+
+	public void setMetadata_file(String metadata_file) {
+		this.metadata_file = metadata_file;
 	}
 }

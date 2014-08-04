@@ -29,6 +29,7 @@ import static org.mockito.Mockito.when;
 
 import org.hibernate.Session;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.springframework.context.support.FileSystemXmlApplicationContext;
 
@@ -39,6 +40,7 @@ import de.uzk.hki.da.model.Job;
 import de.uzk.hki.da.model.Object;
 import de.uzk.hki.da.model.Package;
 import de.uzk.hki.da.model.Node;
+import de.uzk.hki.da.utils.Path;
 
 
 
@@ -56,6 +58,24 @@ public class ActionFactoryTests {
 	/** The c. */
 	private Contractor c = new Contractor();
 	
+	private static int nodeId;
+	
+	@BeforeClass
+	public static void beforeClass() {
+		HibernateUtil.init("src/main/xml/hibernateCentralDB.cfg.xml.inmem");
+		
+		Session session = HibernateUtil.openSession();
+		session.beginTransaction();
+		
+		Node node = new Node("localnode");
+		session.save(node);
+		session.getTransaction().commit();	
+		nodeId = node.getId();
+		session.close();		
+		
+		
+	}
+	
 	/**
 	 * Sets the up.
 	 */
@@ -63,24 +83,12 @@ public class ActionFactoryTests {
 	public void setUp() {
 		c.setShort_name("csn");
 		
-		HibernateUtil.init("src/main/conf/hibernateCentralDB.cfg.xml.inmem");
-		
-		Session session = HibernateUtil.openSession();
-		session.beginTransaction();
 		CentralDatabaseDAO dao = new CentralDatabaseDAO();
-		session.save(new Node("testnode","01-testnode"));
-		
-		ActionCommunicatorService acs = new ActionCommunicatorService();
-		
-		session.getTransaction().commit();	
-		session.close();		
-		
+
 		FileSystemXmlApplicationContext context = new FileSystemXmlApplicationContext(baseDirPath+"action-definitions.xml");
 		factory = new ActionFactory();
 		factory.setApplicationContext(context);
 		factory.setDao(dao);
-		factory.setActionCommunicatorService(acs);
-		factory.setIrodsZonePath("/da-nrw/");
 		factory.setActionRegistry((ActionRegistry)context.getBean("actionRegistry"));
 	}
 	
@@ -92,7 +100,7 @@ public class ActionFactoryTests {
 		
 		CentralDatabaseDAO dummyDao = mock(CentralDatabaseDAO.class);
 
-		Job j = new Job("node", "450"); 
+		Job j = new Job("localnode", "450"); 
 		Object o = new Object();
 		Package p = new Package();
 		o.getPackages().add(p);
@@ -101,19 +109,14 @@ public class ActionFactoryTests {
 		when(dummyDao.fetchJobFromQueue(anyString(),anyString(),(Node)anyObject())).
 			thenReturn(j);
 		
-		Node node = new Node("da-nrw-vm3.hki.uni-koeln.de","01-vm3"); node.setId(42);
-		node.setName("da-nrw-vm3.hki.uni-koeln.de");
-		node.setWorkAreaRootPath("fakePath");
-		node.setDipAreaRootPath("fakePath");
-		
 		factory.setDao(dummyDao);	
-		factory.setLocalNode(node);
+		factory.setLocalNode(new Node());
 		
 		AbstractAction a = factory.buildNextAction();
 		assertNotNull(a);
 		assertEquals("450", a.getStartStatus());
 		assertEquals("460", a.getEndStatus());
-		assertEquals("da-nrw-vm3.hki.uni-koeln.de", a.getLocalNode().getName());
+		
 		assertNotNull(a.getDao());
 //		assertEquals("csn", a.getJob().getObject().getContractor().getShort_name()); XXX used?
 		assertNotNull(a.getActionMap());
@@ -131,8 +134,8 @@ public class ActionFactoryTests {
 		when(dummyDao.fetchJobFromQueue(anyString(),anyString(),(Node)anyObject())).
 			thenReturn(null);
 		
-		Node node = new Node("da-nrw-vm3.hki.uni-koeln.de","01-vm3"); node.setId(42); node.setName("testnode");
-		
+		Node node = new Node("localnode");
+		node.setId(nodeId);
 		factory.setDao(dummyDao);
 		factory.setLocalNode(node);
 		

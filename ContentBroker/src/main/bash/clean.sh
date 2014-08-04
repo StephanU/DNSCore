@@ -1,15 +1,15 @@
 #!/bin/bash
 
 # author: Daniel M. de Oliveira
+# author: Jens Peters
+echo clean iRODS Stuff
 
-echo clean up installer
-cd ../installation
-rm ContentBroker.tar 2>/dev/null
-rm beans.xml* 2>/dev/null
-rm daweb3.war 2>/dev/null
-rm config.properties 2>/dev/null
-rm hibernateCentralDB.cfg.xml 2>/dev/null
-rm logback.xml 2>/dev/null
-rm ffmpeg.sh 2>/dev/null
-rm VERSION.txt 2>/dev/null
-cd ../ContentBroker 
+if [ "$1" = "ci" ]
+then
+	irm -rf /c-i/aip/TEST                2>/dev/null
+	irm -rf /c-i/pips/institution/TEST   2>/dev/null
+	irm -rf /c-i/pips/public/TEST        2>/dev/null
+	rm -r /ci/storage/GridCacheArea/aip/TEST 
+	mkdir /ci/storage/GridCacheArea/aip/TEST
+fi
+

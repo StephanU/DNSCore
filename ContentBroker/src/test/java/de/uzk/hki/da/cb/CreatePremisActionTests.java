@@ -45,8 +45,7 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import de.uzk.hki.da.convert.JhoveScanService;
-import de.uzk.hki.da.core.ActionCommunicatorService;
+import de.uzk.hki.da.format.JhoveScanService;
 import de.uzk.hki.da.model.CentralDatabaseDAO;
 import de.uzk.hki.da.model.Contractor;
 import de.uzk.hki.da.model.DAFile;
@@ -55,6 +54,9 @@ import de.uzk.hki.da.model.Job;
 import de.uzk.hki.da.model.Node;
 import de.uzk.hki.da.model.Object;
 import de.uzk.hki.da.model.Package;
+import de.uzk.hki.da.utils.C;
+import de.uzk.hki.da.utils.Path;
+import de.uzk.hki.da.utils.RelativePath;
 
 
 /**
@@ -65,6 +67,7 @@ import de.uzk.hki.da.model.Package;
  */
 public class CreatePremisActionTests {
 
+	
 	/** The Constant logger. */
 	static final Logger logger = LoggerFactory.getLogger(CreatePremisActionTests.class);
 	
@@ -72,20 +75,17 @@ public class CreatePremisActionTests {
 	CreatePremisAction action = new CreatePremisAction();
 	
 	/** The main folder. */
-	String mainFolder = "src/test/resources/cb/CreatePremisActionTests/";
+	Path workAreaRootPath = new RelativePath("src/test/resources/cb/CreatePremisActionTests/");
 
-	String objCharTifAFilePath = mainFolder + "jhove_output_2013_07_21+14_28+a_image_tif.xml";
-	String objCharTifBFilePath = mainFolder + "jhove_output_2013_07_21+14_28+b_image_tif.xml";
-	String objCharPremisAFilePath = mainFolder + "jhove_output_2013_07_21+14_28+a_premis_xml.xml";
+	String objCharTifAFilePath = workAreaRootPath + "/jhove_output_2013_07_21+14_28+a_image_tif.xml";
+	String objCharTifBFilePath = workAreaRootPath + "/jhove_output_2013_07_21+14_28+b_image_tif.xml";
+	String objCharPremisAFilePath = workAreaRootPath + "/jhove_output_2013_07_21+14_28+a_premis_xml.xml";
 	
 	/** The object. */
 	Object object;
 
 	/** The job. */
 	Job job;
-	
-	/** The action communicator service. */
-	ActionCommunicatorService acs;
 	
 	private Package pkg;  // normal test: unused ,  delta test: the aip 
 	private Package pkg2; // normal test: the sip,  delta test: the delta-sip
@@ -96,11 +96,11 @@ public class CreatePremisActionTests {
 	 */
 	@Before
 	public void setUp() throws IOException {
-		FileUtils.copyFileToDirectory(new File("src/main/resources/premis.xsd"), new File("conf/"));
-		FileUtils.copyFileToDirectory(new File("src/main/resources/xlink.xsd"), new File("conf/"));
+		FileUtils.copyFileToDirectory(C.PREMIS_XSD, new File("conf/"));
+		FileUtils.copyFileToDirectory(C.XLINK_XSD, new File("conf/"));
 		
 		Node node = new Node();
-		node.setWorkAreaRootPath(mainFolder + "work/");
+		node.setWorkAreaRootPath(workAreaRootPath);
 		
 		pkg = new Package();
 		pkg.setId(1234565);
@@ -126,13 +126,10 @@ public class CreatePremisActionTests {
 		CentralDatabaseDAO dao = mock (CentralDatabaseDAO.class);
 		action.setDao(dao);
 		
-		acs = new ActionCommunicatorService();
-		acs.addDataObject(7654321, "container_extension", "tgz");
-		action.setActionCommunicatorService(acs);
 
 		JhoveScanService jhoveScanService = mock(JhoveScanService.class);
 		when(jhoveScanService.getJhoveFolder()).
-			thenReturn(mainFolder + "JhoveFolder");				
+			thenReturn(workAreaRootPath + "/JhoveFolder");				
 		action.setJhoveScanService(jhoveScanService);		
 		
 		DAFile a = new DAFile(pkg2,"2013_07_31+11_54+a","140864.tif");
@@ -163,6 +160,7 @@ public class CreatePremisActionTests {
 		job = new Job();
 		object.setOrig_name("testpackage");
 		job.setId(7654321);
+		job.setContainer_extension("tgz");
 		job.setObject(object);
 		job.setRep_name("2013_07_31+11_54+");
 		action.setJob(job);
@@ -178,9 +176,9 @@ public class CreatePremisActionTests {
 	public void tearDown() {
 		new File("conf/premis.xsd").delete();
 		new File("conf/xlink.xsd").delete();
-		new File(mainFolder + "work/TEST/identifier_deltas/data/premis_old.xml").delete();
-		new File(mainFolder + "work/TEST/identifier/data/2013_07_31+11_54+b/premis.xml").delete();
-		new File(mainFolder + "work/TEST/identifier_deltas/data/2013_07_31+11_54+b/premis.xml").delete();
+		Path.make(workAreaRootPath,"work/TEST/identifier_deltas/data/premis_old.xml").toFile().delete();
+		Path.make(workAreaRootPath,"work/TEST/identifier/data/2013_07_31+11_54+b/premis.xml").toFile().delete();
+		Path.make(workAreaRootPath,"work/TEST/identifier_deltas/data/2013_07_31+11_54+b/premis.xml").toFile().delete();
 	}
 	
 
@@ -199,8 +197,10 @@ public class CreatePremisActionTests {
 		action.implementation();
 		checkPremisFile();
 		
-		assertTrue(action.getActionCommunicatorService().getDataObject(7654321, "static_nondisclosure_limit") != null) ;
-		assertTrue(action.getActionCommunicatorService().getDataObject(7654321, "dynamic_nondisclosure_limit") == null);
+		
+		
+		assertTrue(job.getStatic_nondisclosure_limit() != null) ;
+		assertTrue(job.getDynamic_nondisclosure_limit() == null);
 	}
 	
 	/**
@@ -212,8 +212,8 @@ public class CreatePremisActionTests {
 		
 		object.setIdentifier("identifier_deltas");
 		
-		FileUtils.copyFile(new File(mainFolder + "premis_deltatest.xml"),
-						   new File(mainFolder + "work/TEST/identifier_deltas/data/premis_old.xml"));
+		FileUtils.copyFile(Path.make(workAreaRootPath,"premis_deltatest.xml").toFile(),
+						   Path.make(workAreaRootPath,"work/TEST/identifier_deltas/data/premis_old.xml").toFile());
 		
 		action.implementation();
 		checkDeltaPremisFile();		
@@ -244,19 +244,19 @@ public class CreatePremisActionTests {
 		
 		object.setIdentifier("identifier_deltas");
 		
-		FileUtils.copyFile(new File(mainFolder + "premis_deltatest.xml"),
-						   new File(mainFolder + "work/TEST/identifier_deltas/data/premis_old.xml"));
+		FileUtils.copyFile(Path.makeFile(workAreaRootPath,"premis_deltatest.xml"),
+						   Path.makeFile(workAreaRootPath,"work/TEST/identifier_deltas/data/premis_old.xml"));
 		
 		action.implementation();
 		action.rollback();
 		
-		assertFalse(new File(object.getDataPath() + object.getNameOfNewestBRep() + "/premis.xml").exists());
-		assertFalse(new File(mainFolder + "JhoveFolder/temp/" + job.getId() + "/premis_output/").exists());
+		assertFalse(Path.makeFile(object.getDataPath(),object.getNameOfNewestBRep(),"premis.xml").exists());
+		assertFalse(Path.makeFile(workAreaRootPath,"JhoveFolder","temp",new Integer(job.getId()).toString(),"premis_output").exists());
 		
 		assertEquals(1, object.getLatestPackage().getEvents().size());
 		
-		assertEquals(null, acs.getDataObject(job.getId(), "static_nondisclosure_limit"));
-		assertEquals(null, acs.getDataObject(job.getId(), "dynamic_nondisclosure_limit"));
+		assertEquals(null, job.getStatic_nondisclosure_limit());
+		assertEquals(null, job.getDynamic_nondisclosure_limit());
 	}
 	
 	/**
@@ -274,7 +274,7 @@ public class CreatePremisActionTests {
 		Element objectCharTifBRoot;
 		Element objectCharPremisARoot;
 		try {
-			doc = builder.build(mainFolder + "work/TEST/identifier/data/2013_07_31+11_54+b/premis.xml");
+			doc = builder.build(Path.makeFile(workAreaRootPath,"work/TEST/identifier/data/2013_07_31+11_54+b/premis.xml"));
 			
 			objectCharTifARoot = builder.build(objCharTifAFilePath).getRootElement();
 			objectCharTifBRoot = builder.build(objCharTifBFilePath).getRootElement();
@@ -493,7 +493,7 @@ public class CreatePremisActionTests {
 		SAXBuilder builder = new SAXBuilder();
 		Document doc;
 		try {
-			doc = builder.build(mainFolder + "work/TEST/identifier_deltas/data/2013_07_31+11_54+b/premis.xml");
+			doc = builder.build(workAreaRootPath + "/work/TEST/identifier_deltas/data/2013_07_31+11_54+b/premis.xml");
 			
 			objectCharTifARoot = builder.build(objCharTifAFilePath).getRootElement();
 			objectCharTifBRoot = builder.build(objCharTifBFilePath).getRootElement();
