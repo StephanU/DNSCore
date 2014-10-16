@@ -22,22 +22,35 @@ package de.uzk.hki.da.cb;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Matchers.anyObject;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.List;
 
+import javax.xml.parsers.ParserConfigurationException;
+
+import org.jdom.JDOMException;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
+import org.xml.sax.SAXException;
 
+import de.uzk.hki.da.core.C;
+import de.uzk.hki.da.core.Path;
 import de.uzk.hki.da.core.UserException;
+import de.uzk.hki.da.ff.FFConstants;
+import de.uzk.hki.da.metadata.FakeMetadataStructure;
+import de.uzk.hki.da.metadata.MetadataStructureFactory;
 import de.uzk.hki.da.model.DAFile;
 import de.uzk.hki.da.model.Object;
 import de.uzk.hki.da.model.Package;
 import de.uzk.hki.da.repository.RepositoryException;
-import de.uzk.hki.da.utils.C;
-import de.uzk.hki.da.utils.Path;
-import de.uzk.hki.da.utils.TESTHelper;
-import de.uzk.hki.da.utils.TC;
+import de.uzk.hki.da.test.TC;
+import de.uzk.hki.da.test.TESTHelper;
 
 /**
  * @author Daniel M. de Oliveira
@@ -52,39 +65,59 @@ public class ValidateMetadataActionTests {
 	private static final String VDA03_XML = "vda03.xml";
 	private static final String METS_2_99_XML = "mets_2_99.xml";
 	private static final String IDENTIFIER = "identifier";
-	private static final Path WORK_AREA_ROOT = Path.make(TC.TEST_ROOT_CB,"ValidateMetadataActionTests");
+	private static final Path WORK_AREA_ROOT = Path.make(TC.TEST_ROOT_CB,"ValidateMetadataActionTests","work");
 	private static final String XMP1_XML = "xmp1.xmp";
 	private static final String LIDO_XML = "lido1.xml";
+	private static final String LIDO2_XML = "lido2.xml";
 	
+	private static MetadataStructureFactory msf;
 	
 	private Object object;
 	
 	ValidateMetadataAction action = new ValidateMetadataAction();
-
 	
 	DAFile f_ead1 = new DAFile(null,REP_A,VDA03_XML);
 	DAFile f_ead2 = new DAFile(null,REP_B,EAD_XML);
 	DAFile f_mets1 = new DAFile(null,"",METS_2_99_XML); 
 	DAFile f_mets2 = new DAFile(null,"",METS_2_998_XML);
-	DAFile f_xmp1 = new DAFile(null,"",XMP1_XML);
+	DAFile f_xmp1 = new DAFile(null,"1+a",XMP1_XML);
 	DAFile f_lido1 = new DAFile(null,"",LIDO_XML);
-	DAFile f_lido2 = new DAFile(null,"",LIDO_XML);
+	DAFile f_lido2 = new DAFile(null,"",LIDO2_XML);
 
 	
-	
+//	@SuppressWarnings("static-access")
+	@SuppressWarnings("unchecked")
+	@BeforeClass
+	public static void mockDca() throws IOException, JDOMException, ParserConfigurationException, SAXException {
+		msf = mock(MetadataStructureFactory.class);
+		File file = null;
+		List<DAFile> dafiles = null;
+		when(msf.create((String)anyObject(),(File)anyObject(), (List<DAFile>)anyObject())).thenReturn(new FakeMetadataStructure(file, dafiles));	
+	}
 	
 	@Before
 	public void setUp(){
+		
 		object = TESTHelper.setUpObject(IDENTIFIER,WORK_AREA_ROOT);
+		
+		f_ead1.setPackage(object.getLatestPackage());
+		f_ead2.setPackage(object.getLatestPackage());
+		f_mets1.setPackage(object.getLatestPackage());
+		f_mets2.setPackage(object.getLatestPackage());
+		f_xmp1.setPackage(object.getLatestPackage());
+		f_lido1.setPackage(object.getLatestPackage());
+		f_lido2.setPackage(object.getLatestPackage());
+		
+		action.setMsf(msf);
 		action.setObject(object);
 
-		f_ead1.setFormatPUID(C.EAD_PUID);
-		f_ead2.setFormatPUID(C.EAD_PUID);
-		f_mets1.setFormatPUID(C.METS_PUID);
-		f_mets2.setFormatPUID(C.METS_PUID);
-		f_xmp1.setFormatPUID(C.XMP_PUID);
-		f_lido1.setFormatPUID(C.LIDO_PUID);
-		f_lido2.setFormatPUID(C.LIDO_PUID);
+		f_ead1.setFormatSecondaryAttribute(FFConstants.SUBFORMAT_IDENTIFIER_EAD);
+		f_ead2.setFormatSecondaryAttribute(FFConstants.SUBFORMAT_IDENTIFIER_EAD);
+		f_mets1.setFormatSecondaryAttribute(FFConstants.SUBFORMAT_IDENTIFIER_METS);
+		f_mets2.setFormatSecondaryAttribute(FFConstants.SUBFORMAT_IDENTIFIER_METS);
+		f_xmp1.setFormatSecondaryAttribute(FFConstants.SUBFORMAT_IDENTIFIER_XMP);
+		f_lido1.setFormatSecondaryAttribute(FFConstants.SUBFORMAT_IDENTIFIER_LIDO);
+		f_lido2.setFormatSecondaryAttribute(FFConstants.SUBFORMAT_IDENTIFIER_LIDO);
 	}
 	
 	
@@ -101,7 +134,7 @@ public class ValidateMetadataActionTests {
 			fail();
 		}catch(UserException e){
 			System.out.println(e.getMessage());
-			assertTrue(e.getMessage().contains(C.EAD));
+			assertTrue(e.getMessage().contains(C.CB_PACKAGETYPE_EAD));
 		}
 	}
 	
@@ -114,7 +147,7 @@ public class ValidateMetadataActionTests {
 		
 		action.implementation();
 		
-		assertEquals(C.EAD,object.getPackage_type());
+		assertEquals(C.CB_PACKAGETYPE_EAD,object.getPackage_type());
 		assertEquals(VDA03_XML,object.getMetadata_file());
 	}
 
@@ -128,7 +161,7 @@ public class ValidateMetadataActionTests {
 			action.implementation();
 			fail();
 		} catch (UserException e){
-			assertTrue(e.getMessage().contains(C.METS));
+			assertTrue(e.getMessage().contains(C.CB_PACKAGETYPE_METS));
 		}
 	}
 	
@@ -139,7 +172,7 @@ public class ValidateMetadataActionTests {
 		
 		action.implementation();
 		
-		assertEquals(C.METS,object.getPackage_type());
+		assertEquals(C.CB_PACKAGETYPE_METS,object.getPackage_type());
 		assertEquals(METS_2_99_XML,object.getMetadata_file());
 	}
 
@@ -150,7 +183,7 @@ public class ValidateMetadataActionTests {
 		
 		action.implementation();
 		
-		assertEquals(C.LIDO,object.getPackage_type());
+		assertEquals(C.CB_PACKAGETYPE_LIDO,object.getPackage_type());
 		assertEquals(LIDO_XML,object.getMetadata_file());
 	}
 	
@@ -165,19 +198,20 @@ public class ValidateMetadataActionTests {
 			fail();
 		}catch(UserException e){
 			System.out.println(e.getMessage());
-			assertTrue(e.getMessage().contains(C.LIDO));
+			assertTrue(e.getMessage().contains(C.CB_PACKAGETYPE_LIDO));
 		}
 	}
 	
+	
 	@Test
-	public void testXMP() throws FileNotFoundException, UserException, IOException, RepositoryException{
+	public void testXMPWithoutRDF() throws FileNotFoundException, UserException, IOException, RepositoryException{
 		
 		object.getLatestPackage().getFiles().add(f_xmp1);
 		
 		action.implementation();
 		
-		assertEquals(C.XMP,object.getPackage_type());
-		assertEquals(C.XMP_RDF,object.getMetadata_file());
+		assertEquals(C.CB_PACKAGETYPE_XMP,object.getPackage_type());
+		assertEquals(C.XMP_METADATA_FILE,object.getMetadata_file());
 	}
 	
 
@@ -185,7 +219,7 @@ public class ValidateMetadataActionTests {
 	public void testRollback() throws Exception{
 		
 		object.setMetadata_file(VDA03_XML);
-		object.setPackage_type(C.EAD);
+		object.setPackage_type(C.CB_PACKAGETYPE_XMP);
 		
 		action.rollback();
 		
@@ -199,7 +233,7 @@ public class ValidateMetadataActionTests {
 		object.getLatestPackage().getFiles().add(f_mets1);
 		
 		object.setMetadata_file(VDA03_XML);
-		object.setPackage_type(C.EAD);
+		object.setPackage_type(C.CB_PACKAGETYPE_EAD);
 		
 		try { 
 			action.implementation();
@@ -215,7 +249,7 @@ public class ValidateMetadataActionTests {
 	public void testRollbackMustNotDeletePreviouslyExistentPackageType() throws Exception{
 		
 		object.setMetadata_file(VDA03_XML);
-		object.setPackage_type(C.EAD);
+		object.setPackage_type(C.CB_PACKAGETYPE_EAD);
 		
 		object.getLatestPackage().getFiles().add(f_mets1);
 		
@@ -226,7 +260,7 @@ public class ValidateMetadataActionTests {
 		action.rollback();
 		
 		assertEquals(VDA03_XML,object.getMetadata_file());
-		assertEquals(C.EAD,object.getPackage_type());
+		assertEquals(C.CB_PACKAGETYPE_EAD,object.getPackage_type());
 	}
 	
 	
@@ -331,27 +365,21 @@ public class ValidateMetadataActionTests {
 	}
 	
 	
-	// TODO cannot test this before getNewestFilesFromAllRepresentations is not separated from looking onto the actual file system.
 	@Test
-	public void testConsiderPreviousPackagesWhenDetectingMetadataFiles() throws FileNotFoundException, IOException, RepositoryException{
+	public void testRejectDuplicateEADWhichComesWithDelta() throws FileNotFoundException, IOException, RepositoryException{
 		
-//		object.getLatestPackage().getFiles().add(f_ead1);
-//		Package pkg2 = new Package();
-//		pkg2.setName("2");
-//		pkg2.getFiles().add(f_ead2);
-//		object.getPackages().add(pkg2);
-//		
-//		try{
-//			action.implementation();
-//			fail();
-//		}catch(UserException e){
-//			System.out.println(e.getMessage());
-//			assertTrue(e.getMessage().contains(C.EAD));
-//		}
+		object.getLatestPackage().getFiles().add(f_ead1);
+		Package pkg2 = new Package();
+		pkg2.setName("2");
+		pkg2.getFiles().add(f_ead2);
+		object.getPackages().add(pkg2);
+		
+		try{
+			action.implementation();
+			fail();
+		}catch(UserException e){
+			System.out.println(e.getMessage());
+			assertTrue(e.getMessage().contains(C.CB_PACKAGETYPE_EAD));
+		}
 	}
-	
-	
-	
-	
-	
 }

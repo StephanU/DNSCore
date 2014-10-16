@@ -20,6 +20,14 @@
 			<div class="message" role="status">${flash.message}</div>
 			</g:if>
 			<ol class="property-list queueEntry">
+			<g:if test="${systemInfo}">
+				<li class="fieldcontain">
+					<span id="urn-label" class="property-label"><g:message code="queueEntry.id.label" default="Systeminformation" /></span>
+					
+						<span class="property-value" aria-labelledby="urn-label">${systemInfo }</span>
+					
+				</li>
+				</g:if>
 				<g:if test="${queueEntryInstance?.id}">
 				<li class="fieldcontain">
 					<span id="urn-label" class="property-label"><g:message code="queueEntry.id.label" default="Job-Id" /></span>
@@ -61,11 +69,11 @@
 				</li>
 				</g:if>
 			
-				<g:if test="${queueEntryInstance?.obj.getContractor().getShortName()}">
+				<g:if test="${queueEntryInstance?.obj.getUser().getShortName()}">
 				<li class="fieldcontain">
 					<span id="contractorShortName-label" class="property-label"><g:message code="queueEntry.contractorShortName.label" default="Contractor Short Name" /></span>
 					
-						<span class="property-value" aria-labelledby="contractorShortName-label">${queueEntryInstance?.obj.getContractor().getShortName()}</span>
+						<span class="property-value" aria-labelledby="contractorShortName-label">${queueEntryInstance?.obj.getUser().getShortName()}</span>
 					
 				</li>
 				</g:if>

@@ -25,14 +25,14 @@ import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.List;
 
+import de.uzk.hki.da.action.AbstractAction;
 import de.uzk.hki.da.core.ConfigurationException;
 import de.uzk.hki.da.format.ConverterService;
 import de.uzk.hki.da.grid.DistributedConversionAdapter;
-import de.uzk.hki.da.metadata.PremisXmlReader;
 import de.uzk.hki.da.model.DAFile;
 import de.uzk.hki.da.model.Event;
-import de.uzk.hki.da.model.Job;
 import de.uzk.hki.da.model.Object;
+import de.uzk.hki.da.model.ObjectPremisXmlReader;
 
 
 
@@ -50,10 +50,20 @@ public class ConvertAction extends AbstractAction {
 	
 	public ConvertAction(){}
 	
+	@Override
+	public void checkActionSpecificConfiguration() throws ConfigurationException {
+		if (distributedConversionAdapter==null) throw new ConfigurationException("distributedConversionAdapter not set");
+	}
+
+	@Override
+	public void checkSystemStatePreconditions() throws IllegalStateException {
+		// Auto-generated method stub
+		
+	}
+
 	@SuppressWarnings({ "unchecked", "rawtypes" })
 	@Override
 	public boolean implementation() throws IOException {
-		if (distributedConversionAdapter==null) throw new ConfigurationException("distributedConversionAdapter not set");
 		
 		if (job.getConversion_instructions().size()==0)
 			logger.warn("No Conversion Instruction could be found for job with id: "+job.getId());
@@ -85,56 +95,11 @@ public class ConvertAction extends AbstractAction {
 		return true;
 	}
 
-	// TODO remove code duplication with scan action
-	private Object parsePremisToMetadata(String pathToPremis) throws IOException {
-		logger.debug("reading rights from " + pathToPremis);
-		Object o = null;
-				
-		try {
-			o = new PremisXmlReader()
-			.deserialize(new File(pathToPremis));
-		} catch (ParseException e) {
-			throw new RuntimeException("error while parsing premis file",e);
-		}
-		
-		return o;
-	}
-	
-	
-
-	void waitForFriendJobsToBeReady(List<Job> friendJobs){
-
-		logger.info("Checking status of friend jobs");
-		while (true){
-			boolean allJobsReady = true;
-			
-			for (Job j:friendJobs){
-				j = dao.refreshJob(j); // little trick to get the tests work ( j = )
-				logger.info("Job on "+j.getResponsibleNodeName()+" is in status "+j.getStatus());
-				if (j.getStatus().equals("581")) throw new RuntimeException(
-						"Error in friend job encountered");
-				if (!j.getStatus().equals("590")) allJobsReady = false;
-			}
-			
-			if (allJobsReady){
-				logger.info("Friends Jobs are ready");
-				break;
-			}
-			
-			try {
-				Thread.sleep(1000);
-			} catch (InterruptedException e) {
-				throw new RuntimeException("Problem with Thread.sleep() encountered");
-			}
-		}
-	}
-
-	
 	/**
 	 * @author Thomas Kleinke
 	 */
 	@Override
-	void rollback() throws IOException {
+	public void rollback() throws IOException {
 		
 		if (localConversionEvents != null) {
 			for (Event e : localConversionEvents) {
@@ -147,6 +112,23 @@ public class ConvertAction extends AbstractAction {
 		
 		logger.info("@Admin: You can safely roll back this job to status "+this.getStartStatus()+" now.");
 	}
+
+	// TODO remove code duplication with scan action
+	private Object parsePremisToMetadata(String pathToPremis) throws IOException {
+		logger.debug("reading rights from " + pathToPremis);
+		Object o = null;
+				
+		try {
+			o = new ObjectPremisXmlReader()
+			.deserialize(new File(pathToPremis));
+		} catch (ParseException e) {
+			throw new RuntimeException("error while parsing premis file",e);
+		}
+		
+		return o;
+	}
+	
+	
 
 	public DistributedConversionAdapter getDistributedConversionAdapter() {
 		return distributedConversionAdapter;

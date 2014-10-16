@@ -37,7 +37,6 @@ import org.jdom.Element;
 import org.jdom.Namespace;
 import org.jdom.input.SAXBuilder;
 import org.junit.After;
-import org.junit.Before;
 import org.junit.Test;
 
 import de.uzk.hki.da.model.Object;
@@ -49,37 +48,23 @@ import de.uzk.hki.da.model.Object;
  */
 public class ATUseCaseIngestPREMISCheck extends PREMISBase{
 	
-	private String originalName = "ATUseCaseIngest1";
-	private String containerName = originalName+".tgz";
+	private static final String originalName = "ATUseCaseIngest1";
+	private static final File unpackedDIP = new File("/tmp/ATUseCaseIngestPREMISCheck");
 	private Object object = null;
 	
-	@Before
-	public void setUp() throws IOException{
-		setUpBase();
-	}
-	
 	@After
-	public void tearDown(){ 
-		try{
-			new File(localNode.getIngestAreaRootPath()+"/TEST/"+containerName).delete();
-			new File("/tmp/"+object.getIdentifier()+".pack_1.tar").delete();
-			FileUtils.deleteDirectory(new File("/tmp/"+object.getIdentifier()+".pack_1"));
-		}catch(Exception e){
-			System.out.println(e.getMessage());
-		}
-		
-		clearDB();
-		cleanStorage();
+	public void tearDown() throws IOException{
+		FileUtils.deleteDirectory(unpackedDIP);
 	}
 	
 	@Test
 	public void testProperPREMISCreation() throws Exception {
 		
-		ingest(originalName);
+		object = ath.ingest(originalName);
 		
-		object = retrievePackage(originalName,"1");
+		ath.retrievePackage(object,unpackedDIP,"1");
 		assertThat(object.getObject_state()).isEqualTo(100);
-		String unpackedObjectPath = "/tmp/"+object.getIdentifier()+".pack_1/";
+		String unpackedObjectPath = unpackedDIP.getAbsolutePath()+"/";
 		
 		String folders[] = new File(unpackedObjectPath + "data/").list();
 		String repAName="";

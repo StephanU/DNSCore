@@ -22,10 +22,10 @@ import java.io.IOException;
 
 import org.apache.commons.lang.NotImplementedException;
 
+import de.uzk.hki.da.action.AbstractAction;
+import de.uzk.hki.da.core.ConfigurationException;
 import de.uzk.hki.da.core.IngestGate;
-import de.uzk.hki.da.grid.DistributedConversionAdapter;
 import de.uzk.hki.da.grid.GridFacade;
-import de.uzk.hki.da.service.RetrievePackagesHelper;
 
 /**
  * @author Daniel M. de Oliveira
@@ -35,11 +35,22 @@ public class ObjectToWorkAreaAction extends AbstractAction {
 
 	private IngestGate ingestGate;
 	private GridFacade gridFacade;
-	private DistributedConversionAdapter distributedConversionAdapter;
 	
+	public ObjectToWorkAreaAction(){SUPPRESS_OBJECT_CONSISTENCY_CHECK = true;}
 	
 	@Override
-	boolean implementation() {
+	public void checkActionSpecificConfiguration() throws ConfigurationException {
+		// Auto-generated method stub
+		
+	}
+
+	@Override
+	public void checkSystemStatePreconditions() throws IllegalStateException {
+		// Auto-generated method stub
+	}
+
+	@Override
+	public boolean implementation() {
 		
 		object.getDataPath().toFile().mkdirs();
 		
@@ -60,8 +71,8 @@ public class ObjectToWorkAreaAction extends AbstractAction {
 			throw new RuntimeException("error while trying to get existing packages from lza area",e);
 		}
 		
-		distributedConversionAdapter.register("work/"+object.getContractor().getShort_name()+"/"+object.getIdentifier(),
-				object.getPath().toString());
+//		distributedConversionAdapter.register("work/"+object.getContractor().getShort_name()+"/"+object.getIdentifier(),
+//				object.getPath().toString());
 		return true;
 	}
 
@@ -70,7 +81,7 @@ public class ObjectToWorkAreaAction extends AbstractAction {
 	
 	
 	@Override
-	void rollback() throws Exception {
+	public void rollback() throws Exception {
 		throw new NotImplementedException("No rollback implemented for this action");
 	}
 
@@ -89,24 +100,6 @@ public class ObjectToWorkAreaAction extends AbstractAction {
 	public void setIngestGate(IngestGate ingestGate) {
 		this.ingestGate = ingestGate;
 	}
-
-
-
-
-
-	public DistributedConversionAdapter getDistributedConversionAdapter() {
-		return distributedConversionAdapter;
-	}
-
-
-
-
-
-	public void setDistributedConversionAdapter(
-			DistributedConversionAdapter distributedConversionAdapter) {
-		this.distributedConversionAdapter = distributedConversionAdapter;
-	}
-
 
 
 

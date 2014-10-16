@@ -34,12 +34,13 @@ import java.util.Map;
 import org.apache.commons.io.IOUtils;
 import org.junit.Test;
 
+import de.uzk.hki.da.core.Path;
 import de.uzk.hki.da.model.Object;
+import de.uzk.hki.da.model.PreservationSystem;
 import de.uzk.hki.da.repository.Fedora3RepositoryFacade;
 import de.uzk.hki.da.repository.RepositoryException;
 import de.uzk.hki.da.repository.RepositoryFacade;
-import de.uzk.hki.da.utils.Path;
-import de.uzk.hki.da.utils.TESTHelper;
+import de.uzk.hki.da.test.TESTHelper;
 
 
 /**
@@ -74,9 +75,12 @@ public class CreateEDMActionTests {
 		edmMappings.put("METS","src/main/xslt/edm/mets-mods_to_edm.xsl");
 		action.setEdmMappings(edmMappings);
 		
-		action.setChoBaseUri("cho");
-		action.setAggrBaseUri("aggr");
-		action.setLocalBaseUri("local");
+		PreservationSystem pSystem = new PreservationSystem();
+		pSystem.setUrisCho("cho");
+		pSystem.setUrisAggr("aggr");
+		pSystem.setUrisLocal("local");
+
+		action.setPSystem(pSystem);
 		action.setRepositoryFacade(repo);
 		action.setObject(object);
 		try {

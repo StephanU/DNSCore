@@ -6,6 +6,7 @@
 		<g:set var="entityName" value="${message(code: 'queueEntry.label', default: 'QueueEntry')}" />
 		<title>Status der Verarbeitung</title>
 		<r:require modules="periodicalupdater, jqueryui"/>
+		 <jqui:resources/>
 		<r:script>
 			var order = "asc";
 			var sort = "id";
@@ -15,7 +16,8 @@
 			$(function() {
 				$("#filter").accordion({ collapsible: true, active: false });
 			});
-	<g:if test="${ !params.search }">		
+	
+		<g:if test="${ !params.search }">		
 			var obj = $.PeriodicalUpdater("./listSnippet",
 				{
 					method: "get",
@@ -31,7 +33,7 @@
 					}
 				}
 			);
-	</g:if>
+			</g:if>
 			function stopUpdater() {		
 				obj.stop();
 			}
@@ -52,7 +54,8 @@
 		</r:script>
 	</head>
 	<body>
-		
+	
+
 		<a href="#list-queueEntry" class="skip" tabindex="-1"><g:message code="default.link.skip.label" default="Skip to content&hellip;"/></a>
 		
 		<div class="nav" role="navigation">
@@ -60,7 +63,7 @@
 				<li><a class="home" href="${createLink(uri: '/')}"><g:message code="default.home.label"/></a></li>
 			</ul>
 		</div>
-		
+	
 		<div id="list-queueEntry" class="content scaffold-list" role="main">			
 			<h1>Bearbeitungsübersicht</h1>			
 			<g:if test="${flash.message}">
@@ -73,8 +76,7 @@
             	<tr>
             		<td>Status:</td>
             			<td><g:textField name="search.status" value="${params.search?.status}" size="5"/></td>
-            		</tr>
-            		
+            		</tr>  		
             		<tr>
             			<td>Originalname:</td>
             			<td><g:textField name="search.obj.origName" value="${params.search?.obj?.origName}" size="50"/></td>
@@ -87,23 +89,11 @@
             			<td>Identifier:</td>
             			<td><g:textField name="search.obj.identifier" value="${params.search?.obj?.identifier}" size="50"/></td>
             		</tr>
-
-            			<tr>
-            			<td>Contractor:</td>
-            			<td>
-            				<g:select id="contractor" name="search.contractor" from="${contractorList}" optionKey="shortName" noSelection="[null:'Alle auswählen']" required="" value="${objectInstance?.contractorList?.shortName}" class="many-to-one"/>
-            			</td>
-            		</tr>
-            			<tr>
-            			<td>InitialNode:</td>
-            			<td>
-            				<g:select id="initialNode" name="search.initialNode" from="${cbNodeList}" noSelection="[null:'Alle auswählen']" required="" value="${objectInstance?.cbNodeList?.name}" class="many-to-one"/>
-            			</td>
-            		</tr>
-
+            	
             		<tr>
             			<td></td>
-            			<td><g:submitButton name="submit" value="Filter anwenden"/></td>
+            			<td>
+            			<g:submitButton name="submit" value="Filter anwenden"/></td>
             		</tr>
             	</table>     
             </g:form>
@@ -122,7 +112,7 @@
 		<div id="legend">
 			<h1><a href="#">Hinweise zu den Statuscodes:</a></h1>
 			<div>
-			<p style="font-style:italic">(xx1,xx3,xx4 bezeichnet einen Fehler, xx2: bezeichnet	arbeitend)</p> 
+			<p style="font-style:italic">(xx0 bedeutet "wartend" - hingegen bezeichnen xx1,xx3,xx4 einen Fehler, xx2: bezeichnet arbeitend)</p> 
 			<table>
 			<tr><th>Statuscode</th><th>Kurzbezeichnung</th><th>Beschreibung</th></tr>
 			<tr><td>110</td><td>IngestUnpackAction</td><td>Auspacken & Vollständigkeitstests</td></tr>

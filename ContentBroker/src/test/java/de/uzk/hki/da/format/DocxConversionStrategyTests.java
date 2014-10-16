@@ -34,16 +34,16 @@ import org.junit.Test;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
+import de.uzk.hki.da.core.Path;
+import de.uzk.hki.da.core.RelativePath;
 import de.uzk.hki.da.format.DocxConversionStrategy;
 import de.uzk.hki.da.model.ConversionInstruction;
 import de.uzk.hki.da.model.ConversionRoutine;
 import de.uzk.hki.da.model.DAFile;
 import de.uzk.hki.da.model.Object;
-import de.uzk.hki.da.utils.Path;
-import de.uzk.hki.da.utils.RelativePath;
+import de.uzk.hki.da.test.TC;
+import de.uzk.hki.da.test.TESTHelper;
 import de.uzk.hki.da.utils.SimplifiedCommandLineConnector;
-import de.uzk.hki.da.utils.TESTHelper;
-import de.uzk.hki.da.utils.TC;
 import de.uzk.hki.da.webservice.HttpFileTransmissionClient;
 
 
@@ -77,7 +77,7 @@ public class DocxConversionStrategyTests {
 		
 		o = TESTHelper.setUpObject("1", new RelativePath(basePath));
 		cs.setObject(o);
-		Path.make(o.getDataPath(),o.getNameOfNewestRep()+"/_Docx.pdf").toFile().createNewFile();
+		Path.make(o.getPath("newest")+"/_Docx.pdf").toFile().createNewFile();
 	}
 	
 	
@@ -99,6 +99,7 @@ public class DocxConversionStrategyTests {
 		
 		HttpFileTransmissionClient httpclient = mock( HttpFileTransmissionClient.class );
 		when( httpclient.postFileAndReadResponse((File)anyObject(),(File)anyObject()) ).thenAnswer(new Answer<java.lang.Object> () {
+			@Override
 			public File answer(InvocationOnMock invocation) {
 				
 				File f = new File(basePath + "TEST/1/data/rep+b/Docx.pdf");
@@ -115,6 +116,7 @@ public class DocxConversionStrategyTests {
 		
 		SimplifiedCommandLineConnector cli = mock ( SimplifiedCommandLineConnector.class );
 		when(cli.execute((String[]) anyObject())).thenAnswer(new Answer<java.lang.Object> () {
+			@Override
 			public Boolean answer(InvocationOnMock invocation) {
 			    java.lang.Object[] args = invocation.getArguments();
 		         String[] cmdarr = (String[]) args[0];

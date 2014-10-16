@@ -20,18 +20,20 @@
 package de.uzk.hki.da.cb;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.text.ParseException;
 
 import org.apache.commons.io.FileUtils;
 
+import de.uzk.hki.da.action.AbstractAction;
 import de.uzk.hki.da.core.ConfigurationException;
+import de.uzk.hki.da.core.Path;
+import de.uzk.hki.da.core.RelativePath;
 import de.uzk.hki.da.grid.DistributedConversionAdapter;
-import de.uzk.hki.da.metadata.PremisXmlReader;
 import de.uzk.hki.da.model.Object;
+import de.uzk.hki.da.model.ObjectPremisXmlReader;
 import de.uzk.hki.da.model.PublicationRight.Audience;
-import de.uzk.hki.da.utils.Path;
-import de.uzk.hki.da.utils.RelativePath;
 
 
 /**
@@ -42,13 +44,28 @@ import de.uzk.hki.da.utils.RelativePath;
  */
 public class PrepareSendToPresenterAction extends AbstractAction {
 
+	private static final String PREMIS_XML = "premis.xml";
 	private DistributedConversionAdapter distributedConversionAdapter;
 	private File publicDir;
 	private File instDir;
 	
+	/**
+	 * @
+	 */
 	@Override
-	boolean implementation() throws IOException {
+	public void checkActionSpecificConfiguration() throws ConfigurationException {
 		if (distributedConversionAdapter==null) throw new ConfigurationException("distributedConversionAdapter not set");
+	}
+
+
+	@Override
+	public void checkSystemStatePreconditions() throws IllegalStateException {
+		// Auto-generated method stub
+	}
+
+
+	@Override
+	public boolean implementation() throws IOException {
 		
 		String dipName = object.getContractor().getShort_name() + "/" + object.getIdentifier()+"_"+object.getLatestPackage().getId();
 		publicDir = Path.makeFile(localNode.getWorkAreaRootPath(),"pips","public",dipName);
@@ -78,15 +95,27 @@ public class PrepareSendToPresenterAction extends AbstractAction {
 	}
 
 
+	@Override
+	public void rollback() throws Exception {
+		if (publicDir.exists()) FileUtils.deleteDirectory(publicDir);
+		if (instDir.exists()) FileUtils.deleteDirectory(instDir);
+		logger.info("@Admin: You can safely roll back this job to status "+this.getStartStatus()+" now.");
+	}
+
+
 	/**
 	 * @author Daniel M. de Oliveira
 	 */
 	private Object readRightsFromPREMIS() throws IOException {
+		if (object.getLatest(PREMIS_XML)==null) throw new FileNotFoundException("premis.xml not present in obect");
+		
 		Object premisObject = null;
 		try {
 
-			premisObject = new PremisXmlReader().deserialize(Path.makeFile(object.getDataPath(),
-					object.getNameOfNewestBRep(),"premis.xml"));
+			premisObject = new ObjectPremisXmlReader().deserialize(
+					object.
+					getLatest(PREMIS_XML).
+					toRegularFile());
 			
 		} catch (ParseException pe){
 			throw new RuntimeException("error while parsing PREMIS-file",pe);
@@ -149,14 +178,6 @@ public class PrepareSendToPresenterAction extends AbstractAction {
 	}
 	
 	
-
-	@Override
-	void rollback() throws Exception {
-		if (publicDir.exists()) FileUtils.deleteDirectory(publicDir);
-		if (instDir.exists()) FileUtils.deleteDirectory(instDir);
-		logger.info("@Admin: You can safely roll back this job to status "+this.getStartStatus()+" now.");
-	}
-
 
 	public DistributedConversionAdapter getDistributedConversionAdapter() {
 		return distributedConversionAdapter;

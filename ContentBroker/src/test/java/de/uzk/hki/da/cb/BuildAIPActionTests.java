@@ -32,15 +32,14 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import de.uzk.hki.da.core.Path;
+import de.uzk.hki.da.core.RelativePath;
 import de.uzk.hki.da.grid.IrodsSystemConnector;
-import de.uzk.hki.da.model.CentralDatabaseDAO;
-import de.uzk.hki.da.model.Contractor;
+import de.uzk.hki.da.model.User;
 import de.uzk.hki.da.model.Job;
 import de.uzk.hki.da.model.Node;
 import de.uzk.hki.da.model.Object;
 import de.uzk.hki.da.model.Package;
-import de.uzk.hki.da.utils.Path;
-import de.uzk.hki.da.utils.RelativePath;
 
 
 /**
@@ -61,9 +60,6 @@ public class BuildAIPActionTests {
 	
 	/** The irods. */
 	static IrodsSystemConnector irods = mock (IrodsSystemConnector.class);
-	
-	/** The dao. */
-	static CentralDatabaseDAO dao = mock (CentralDatabaseDAO.class);
 	
 	/** The action. */
 	static BuildAIPAction action = new BuildAIPAction();
@@ -87,7 +83,7 @@ public class BuildAIPActionTests {
 		pkg.setName("2");
 		pkg.setId(95949);
 		
-		Contractor contractor = new Contractor();
+		User contractor = new User();
 		contractor.setShort_name("csn");
 		
 		Object obj = new Object();
@@ -100,7 +96,6 @@ public class BuildAIPActionTests {
 		job.setRep_name(repName);
 
 		action.setObject(obj);
-		action.setDao(dao);
 		action.setLocalNode(node);
 		action.setJob(job);
 		

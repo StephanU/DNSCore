@@ -22,16 +22,19 @@ package de.uzk.hki.da.grid;
 /**
  * @author Jens Peters
  * The Federated Grid Facade for having a Federation of independent 
- * iRODS Servers 
+ * iRODS Servers. Depends on special configuration on your grid
  */
 import java.io.File;
-import java.util.ArrayList;
+import java.io.IOException;
 import java.util.List;
 
+import org.apache.commons.io.FilenameUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import de.uzk.hki.da.core.C;
 import de.uzk.hki.da.model.StoragePolicy;
+import de.uzk.hki.da.utils.MD5Checksum;
 
 
 
@@ -44,74 +47,73 @@ public class IrodsFederatedGridFacade extends IrodsGridFacade {
 	private static Logger logger = LoggerFactory
 			.getLogger(IrodsFederatedGridFacade.class);
 	
+	
 
 	/* (non-Javadoc)
-	 * @see de.uzk.hki.da.grid.IrodsGridFacade#put(java.io.File, java.lang.String, de.uzk.hki.da.model.StoragePolicy)
+	 * @see de.uzk.hki.da.grid.IrodsGridFacadeBase#put(java.io.File, java.lang.String)
 	 */
-	public boolean put (File file, String gridPath, StoragePolicy sp){
+	@Override
+	public boolean put(File file, String gridPath , StoragePolicy sp) throws IOException {
+		boolean ret = false;
+		ret = super.put(file, gridPath, sp);
+		gridPath = "/" + irodsSystemConnector.getZone() + "/" + C.WA_AIP + gridPath;
 		irodsSystemConnector.connect();
+		if (sp.getForbiddenNodes()!=null && !sp.getForbiddenNodes().isEmpty()) irodsSystemConnector.saveOrUpdateAVUMetadataDataObject(gridPath, "FORBIDDEN_NODES", String.valueOf(sp));
+		irodsSystemConnector.saveOrUpdateAVUMetadataDataObject(gridPath, "MIN_COPIES", String.valueOf(sp.getMinNodes()));
+		irodsSystemConnector.saveOrUpdateAVUMetadataDataObject(gridPath, "FEDERATED", "0");
 		
-		Thread  re = new FederatedCopyExecutor(irodsSystemConnector,file, gridPath, sp);
-		re.start();
-		try {
-			re.join();
-			irodsSystemConnector.logoff();
-			return true;
-		} catch (InterruptedException e) {
-			irodsSystemConnector.logoff();
-			logger.error("catched Interrupted Exception in joining FederatedCopyExecutor() " + e.getMessage());
+		irodsSystemConnector.logoff();
+		return ret;
+	}
+	
+	@Override
+	public boolean storagePolicyAchieved(String gridPath2, StoragePolicy sp) {
+		int minNodes = sp.getMinNodes();
+		
+		if (minNodes == 0 ) {
+			logger.error("Given minnodes setting 0 violates long term preservation");
 			return false;
 		}
-	}	
-
-
-	/* (non-Javadoc)
-	 * @see de.uzk.hki.da.grid.IrodsGridFacade#storagePolicyAchieved(java.lang.String, de.uzk.hki.da.model.StoragePolicy)
-	 */
-	public boolean storagePolicyAchieved(String gridPath, StoragePolicy sp) {
 		irodsSystemConnector.connect();
 		
-		int i = 0;
-		List<String> zp = sp.getDestinations();
-		for (String zone : zp){
-			if (irodsSystemConnector.fileExists("/"+ zone + gridPath));
-			i++;
-		}
-		if (i>=sp.getMinNodes()) {
-			irodsSystemConnector.logoff();
-			return true;
+		String gridPath = "/" + irodsSystemConnector.getZone() + "/" + C.WA_AIP + "/" + gridPath2;
+		
+		String number = irodsSystemConnector.executeRule("checkNumber { \n " +
+				"*numberOfCopies=0;\n" +
+				"acGetNumberOfCopies(*dao,*numberOfCopies);\n"
+				+"}\n"
+				+"INPUT *dao=\""+gridPath+"\"\n"
+				+"OUTPUT *numberOfCopies","*numberOfCopies");
+				logger.debug("iRODS tells us, file " +gridPath+ " has already >" + number +"< Copies");
+		if (number!=null && !number.isEmpty()) {
+			int nr = 0;
+			try {
+				nr = Integer.parseInt(number);
+			} catch (NumberFormatException e) {
+				logger.warn("Could not determine Integer out of Value " + number);
+			}
+			if (nr>= minNodes) {
+				logger.debug ("Reached number of Copies :" + nr);
+				irodsSystemConnector.logoff();
+				return true;
+			} 
 		}
 		irodsSystemConnector.logoff();
 		return false;
 	}
 	
 	public boolean isValid(String gridPath, StoragePolicy sp, String md5Checksum) {
-		irodsSystemConnector.connect();
-
-		int i = 0;
-		
-		List<String> zp = sp.getDestinations();
-		for (String zone : zp){
-			try {
-				String cs = irodsSystemConnector.getChecksum("/"+ zone + gridPath);
-					if (cs.equals(md5Checksum)) {
-						i++;
-					}
-				} catch (IrodsRuntimeException e) {
-				// TODO : this is an exception, which has to be sent to the nodeamdin!!
-				logger.error("FAULTY Checksum " + e.getMessage());
-			}
-			
-		}
-		if (i>=sp.getMinNodes()) {
-			irodsSystemConnector.logoff();
-			return true;
-		}
+		irodsSystemConnector.connect();	
+		String check = "checkItemsQuick {\n"
+	      + "*status=0\n"
+	      + "acIsValid(*dao,*status)\n"
+	      + "}\n"
+	      + "INPUT *dao=\"" + gridPath +"\"\n"
+	      + "OUTPUT *status";
+		if (check!=null && !check.isEmpty() ) {
+			if (check.equals("1")) return true;
+		}	
 		irodsSystemConnector.logoff();
-	
-		
-		
-		
 		return false;
 	}
 }

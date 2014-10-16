@@ -20,8 +20,11 @@
 package de.uzk.hki.da.model;
 import javax.persistence.*;
 
-import de.uzk.hki.da.utils.Path;
+import de.uzk.hki.da.core.Path;
+
 import java.lang.Object;
+import java.util.HashSet;
+import java.util.Set;
 
 
 /**
@@ -35,6 +38,17 @@ public class Node{
 	@Id
 	@GeneratedValue(strategy=GenerationType.AUTO)
 	private int id;
+	
+	@OneToOne
+	@JoinColumn(name="admin_id",unique=true)
+	private User admin;
+	
+	@ManyToMany(cascade = {CascadeType.ALL})
+    @JoinTable(name="nodes_contractors", 
+                joinColumns={@JoinColumn(name="node_id")}, 
+                inverseJoinColumns={@JoinColumn(name="contractor_user_id")})
+    private Set<User> contractors = new HashSet<User>();
+	
 	
 	/** The name. */
 	private String name;
@@ -56,9 +70,6 @@ public class Node{
 	
 	/** The grid cache area root path. */
 	@Transient private Path gridCacheArea;
-	
-	/** The admin email. */
-	@Transient private String adminEmail;
 	
 	/** The working resource. */
 	@Transient private String workingResource;
@@ -304,25 +315,6 @@ public class Node{
 	}
 	
 	/**
-	 * Sets the admin email.
-	 *
-	 * @param adminEmail the new admin email
-	 */
-	public void setAdminEmail(String adminEmail) {
-		this.adminEmail = adminEmail;
-	}
-	
-	/**
-	 * Gets the admin email.
-	 *
-	 * @return the admin email
-	 */
-	public String getAdminEmail() {
-		return adminEmail;
-	}
-
-
-	/**
 	 * Sets the grid cache area root path.
 	 *
 	 * @param gridCacheAreaRootPath the gridCacheAreaRootPath to set
@@ -359,6 +351,22 @@ public class Node{
 	 */
 	public void setDipResource(String dipResource) {
 		this.dipResource = dipResource;
+	}
+
+	public User getAdmin() {
+		return admin;
+	}
+
+	public void setAdmin(User admin) {
+		this.admin = admin;
+	}
+
+	public Set<User> getContractors() {
+		return contractors;
+	}
+
+	public void setContractors(Set<User> contractors) {
+		this.contractors = contractors;
 	}
 	
 }

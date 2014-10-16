@@ -32,16 +32,27 @@ import org.springframework.context.support.FileSystemXmlApplicationContext;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.core.task.TaskRejectedException;
 
-import de.uzk.hki.da.cb.AbstractAction;
+import de.uzk.hki.da.action.AbstractAction;
+import de.uzk.hki.da.action.ActionFactory;
+import de.uzk.hki.da.action.ActionInformation;
 import de.uzk.hki.da.utils.Utilities;
 
 
 
 
 /**
- * Facade to a whole bunch of processes that we will probably model later as iRods-Microservices.
+ * ContentBroker is the main application for DNSCore, serving all needed actions 
+ * for SIP to AIP and PIP transformation
  * 
- * @author: daniel & the danrw team
+ * @author: Daniel M. de Oliveira
+ * @author: Sebastian Cuy
+ * @author: Jens Peters
+ * @author: Thomas Kleinke
+ * @author: Polina Gubaidullina
+ * @author: Martin Fischer
+ * @author: Johanna Puhl
+ * @author: Lisa Rau
+ * @author: Chris Weitz
  */
 public class ContentBroker {
 	
@@ -109,6 +120,7 @@ public class ContentBroker {
 		Utilities.parseArguments(args,props);
 		
 		try {
+			@SuppressWarnings("resource")
 			AbstractApplicationContext context =
 					new FileSystemXmlApplicationContext("conf/beans.xml");
 			context.registerShutdownHook();

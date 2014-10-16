@@ -19,19 +19,17 @@
 
 package de.uzk.hki.da.cb;
 
-import javax.mail.MessagingException;
-
 import org.apache.commons.lang.NotImplementedException;
 
+import de.uzk.hki.da.action.AbstractAction;
 import de.uzk.hki.da.core.ConfigurationException;
+import de.uzk.hki.da.core.RelativePath;
 import de.uzk.hki.da.grid.GridFacade;
 import de.uzk.hki.da.model.Job;
 import de.uzk.hki.da.model.Object;
 import de.uzk.hki.da.model.Package;
 import de.uzk.hki.da.model.StoragePolicy;
-import de.uzk.hki.da.service.Mail;
-import de.uzk.hki.da.utils.Path;
-import de.uzk.hki.da.utils.RelativePath;
+import de.uzk.hki.da.service.MailContents;
 
 /**
  * Audit Action.
@@ -45,32 +43,32 @@ public class AuditAction extends AbstractAction {
 
 	
 	private String nodeAdminEmail;
-	private String systemFromEmailAddress;
-
-
-	private int minNodes;
 	private GridFacade gridRoot;
 
-	private static class ObjectState {
-		private static final Integer UnderAudit = 60;
-		private static final Integer Error = 51;
-		private static final Integer archivedAndValidState = 100;
+	
+	@Override
+	public void checkActionSpecificConfiguration() throws ConfigurationException {
+		if (getGridRoot()==null) throw new ConfigurationException("gridRoot not set");
 	}
+
+	@Override
+	public void checkSystemStatePreconditions() throws IllegalStateException {
+		if (nodeAdminEmail == null) throw new ConfigurationException("nodeAdminEmail is null!");
+		if (preservationSystem.getMinRepls()==0) throw new ConfigurationException("minNodes, 0 is not allowed!");
+		if (preservationSystem.getAdmin().getEmailAddress()==null)  throw new ConfigurationException("systemFromEmailAdress is not set!");
+	}
+
 	/*
 	 * 
 	 * (non-Javadoc)
 	 * @see de.uzk.hki.da.cb.AbstractAction#implementation()
 	 */
 	@Override
-	boolean implementation() {
-		if (getGridRoot()==null) throw new ConfigurationException("gridRoot not set");
-		if (nodeAdminEmail == null) throw new ConfigurationException("nodeAdminEmail is null!");
-		if (minNodes==0) throw new ConfigurationException("minNodes, 0 is not allowed!");
-		if (systemFromEmailAddress==null)  throw new ConfigurationException("systemFromEmailAdress is not set!");
+	public boolean implementation() {
 		setKILLATEXIT(true);
-		setObjectState(job,ObjectState.UnderAudit);
+		setObjectState(job,Object.ObjectStatus.UnderAudit);
 		StoragePolicy sp = new StoragePolicy(localNode);
-		sp.setMinNodes(minNodes);
+		sp.setMinNodes(preservationSystem.getMinRepls());
 		
 		String msg= "";
 		// TODO: refactor to same implementation IntegrityScanner uses
@@ -92,43 +90,22 @@ public class AuditAction extends AbstractAction {
 		}
 		if (completelyValid) {
 			logger.debug("Object checked OK, setting object state to 100");
-			object.setObject_state(ObjectState.archivedAndValidState);
+			object.setObject_state(Object.ObjectStatus.ArchivedAndValid);
 		} else {
-			object.setObject_state(ObjectState.Error);
+			object.setObject_state(Object.ObjectStatus.Error);
 			logger.error("Object " + object.getIdentifier()  + " has following errors :" +  msg);
 			unloadAndRepair(object);
-			informNodeAdmin(object, msg);
+			new MailContents(preservationSystem,localNode).auditInformNodeAdmin(object, msg);
 		}		
 		return true;
 	}
 
 	@Override
-	void rollback() throws Exception {
+	public void rollback() throws Exception {
 		throw new NotImplementedException("No rollback implemented for this action");
 	}
 	
-	/**
-	 * Informs the Node Admin about the problems being found
-	 * 
-	 * @param logicalPath
-	 * @param msg
-	 * @author Jens Peters
-	 */
 	
-	void informNodeAdmin(Object obj, String msg) {
-		// send Mail to Admin with Package in Error
-
-		String subject = "[" + "da-nrw".toUpperCase() + "] Problem Report für " + obj.getIdentifier();
-		if (nodeAdminEmail != null && !nodeAdminEmail.equals("") && getSystemFromEmailAdress() != null && !getSystemFromEmailAdress().equals("")) {
-			try {
-				Mail.sendAMail(getSystemFromEmailAdress(), nodeAdminEmail, subject, msg);
-			} catch (MessagingException e) {
-				logger.error("Sending email problem report for " +  obj.getIdentifier() + " failed");
-			}
-		} else {
-			logger.error("Node Admin / SystemFromEmail has no be a valid Email address!");
-		}
-	}
 	
 	
 	
@@ -156,20 +133,7 @@ public class AuditAction extends AbstractAction {
 	public String getNodeAdminEmail() {
 		return nodeAdminEmail;
 	}
-	/**
-	 * @param minNodes
-	 *            the minNodes to set
-	 */
-	public void setMinNodes(int minNodes) {
-		this.minNodes = minNodes;
-	}
-
-	/**
-	 * @return the minNodes
-	 */
-	public int getMinNodes() {
-		return minNodes;
-	}
+	
 
 	public GridFacade getGridRoot() {
 		return gridRoot;
@@ -178,12 +142,4 @@ public class AuditAction extends AbstractAction {
 	public void setGridRoot(GridFacade gridRoot) {
 		this.gridRoot = gridRoot;
 	}
-	public String getSystemFromEmailAddress() {
-		return systemFromEmailAddress;
-	}
-
-	public void setSystemFromEmailAddress(String systemFromEmailAddress) {
-		this.systemFromEmailAddress = systemFromEmailAddress;
-	}
-
 }

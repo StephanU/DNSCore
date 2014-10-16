@@ -44,14 +44,6 @@
             			<td>Identifier:</td>
             			<td><g:textField name="search.identifier" value="${params.search?.identifier}" size="50"/></td>
             		</tr>
-            		<g:if test="${admin}">
-            			<tr>
-            			<td>Contractor:</td>
-            			<td>
-            				<g:select id="contractor" name="searchContractorName" from="${contractorList}" noSelection="[null:'Alle auswählen']" optionKey="shortName" required="" value="${objectInstance?.contractorList?.shortName}" class="many-to-one"/>
-						</td>
-            		</tr>
-            		</g:if>
             		<tr>
             			<td></td>
             			<td><g:submitButton name="submit" value="Filter anwenden"/></td>
@@ -75,13 +67,11 @@
 						<tr>
 							<th><g:message code="object.identifier.label" default="Ident" /></th>
 							
-							<g:sortableColumn property="urn" title="${message(code: 'object.urn.label', default: 'Urn')}" />
-						
-							<g:sortableColumn property="contractor" title="${message(code: 'object.contractor.label', default: 'Contractor')}" />
-							<!-- <th><g:message code="object.contractor.label" default="Contractor" /></th> -->
-							
-							
+							<g:sortableColumn property="urn" title="${message(code: 'object.urn.label', default: 'Urn')}" />						
 							<g:sortableColumn property="origName" title="${message(code: 'object.origName.label', default: 'Orig Name')}" />
+							<g:sortableColumn property="created" title="${message(code: 'object.created.label', default: 'Erstellt')}" />
+							<g:sortableColumn property="modified" title="${message(code: 'object.modified.label', default: 'Geändert')}" />
+							
 							<g:if test="${admin}">
 							<g:sortableColumn style="text-align: center" property="object_state" title="${message(code: 'object.object_state.label', default: 'Objekt Status')}" />
 							<th style="text-align: center">Überprüfen</th>
@@ -113,9 +103,9 @@
 						
 							<td><g:link action="show" id="${objectInstance.id}">${objectInstance.getFormattedUrn()}</g:link></td>
 						
-							<td>${fieldValue(bean: objectInstance, field: "contractor")}</td>
-						
 							<td>${fieldValue(bean: objectInstance, field: "origName")}</td>
+							<td>${objectInstance.getFormattedCreatedDate()}</td>
+							<td>${objectInstance.getFormattedModifiedDate()}</td>
 							
 							<g:if test="${admin}">
 							<td style="text-align: center">
@@ -174,7 +164,7 @@
 							</g:else>
 							<td style="text-align: center">
 								<g:if test="${new File(baseFolder+ "/"+ objectInstance.identifier +".tar").exists()}">
-									 <g:link controller="outgoing" action="webdav" params="['filename':objectInstance.identifier +'.tar']">
+									 <g:link controller="outgoing" action="download" params="['filename':objectInstance.identifier +'.tar']">
 										<g:img style="width:16px; height:16px" uri="/images/icons/delivery.png"/>
 									</g:link>
 								</g:if>
@@ -183,6 +173,7 @@
 					</g:each>
 					</tbody>
 				</table>
+				StandardView
 			</g:formRemote>
 
 

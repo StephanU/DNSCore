@@ -23,26 +23,29 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
 import org.junit.runners.Suite.SuiteClasses;
 
-import de.uzk.hki.da.cb.AbstractActionTests;
+import de.uzk.hki.da.action.AbstractActionTests;
+import de.uzk.hki.da.action.ActionFactoryTests;
+import de.uzk.hki.da.action.ActionRegistryTests;
+import de.uzk.hki.da.action.JobManagerTests;
+import de.uzk.hki.da.action.NewActionRegistryTests;
+import de.uzk.hki.da.action.SmartActionFactoryTests;
 import de.uzk.hki.da.cb.ArchiveReplicationActionTests;
 import de.uzk.hki.da.cb.BuildAIPActionTests;
 import de.uzk.hki.da.cb.CheckFormatsActionTest;
 import de.uzk.hki.da.cb.ConversionInstructionsBuilderTests;
-import de.uzk.hki.da.cb.ConvertActionNodeSplittingTests;
 import de.uzk.hki.da.cb.ConvertActionTests;
 import de.uzk.hki.da.cb.ConvertCheckActionTests;
 import de.uzk.hki.da.cb.CreateEDMActionTests;
 import de.uzk.hki.da.cb.CreatePremisActionTests;
 import de.uzk.hki.da.cb.DeleteObjectActionTests;
 import de.uzk.hki.da.cb.FetchPIPsActionTest;
-import de.uzk.hki.da.cb.IndexMetadataActionTests;
-import de.uzk.hki.da.cb.ObjectTest;
+import de.uzk.hki.da.cb.PostRetrievalActionTest;
 import de.uzk.hki.da.cb.PrepareSendToPresenterActionTests;
-import de.uzk.hki.da.cb.ProperRefreshOfJobChildrenTest;
+import de.uzk.hki.da.cb.ProcessUserDecisionsActionTests;
+import de.uzk.hki.da.cb.RestartIngestWorkflowActionTests;
 import de.uzk.hki.da.cb.RestructureActionTests;
-import de.uzk.hki.da.cb.RetrievalActionTest;
+import de.uzk.hki.da.cb.RetrievalActionTests;
 import de.uzk.hki.da.cb.ScanActionTests;
-import de.uzk.hki.da.cb.SelectProcessingNodesTests;
 import de.uzk.hki.da.cb.SendToPresenterActionTests;
 import de.uzk.hki.da.cb.ShortenFileNamesActionTests;
 import de.uzk.hki.da.cb.TarActionTests;
@@ -52,11 +55,13 @@ import de.uzk.hki.da.cb.UpdateMetadataActionEADTests;
 import de.uzk.hki.da.cb.UpdateMetadataActionLIDOTests;
 import de.uzk.hki.da.cb.UpdateMetadataActionTests;
 import de.uzk.hki.da.cb.UpdateMetadataActionXMPTests;
+import de.uzk.hki.da.cb.UpdateMetadataRheinlaender;
 import de.uzk.hki.da.cb.ValidateMetadataActionTests;
+import de.uzk.hki.da.ff.FakeFileFormatFacadeTests;
+import de.uzk.hki.da.ff.PublicationMetadataSubformatIdentifierTests;
+import de.uzk.hki.da.ff.SecondaryFormatScanTests;
 import de.uzk.hki.da.format.CLIConversionStrategyTests;
 import de.uzk.hki.da.format.ConverterServiceTests;
-import de.uzk.hki.da.format.FidoCLITest;
-import de.uzk.hki.da.format.FormatScanServiceTests;
 import de.uzk.hki.da.format.PDFServiceTests;
 import de.uzk.hki.da.format.PdfConversionStrategyTest;
 import de.uzk.hki.da.format.PublishAudioConversionStrategyTests;
@@ -73,20 +78,17 @@ import de.uzk.hki.da.metadata.MetsURNXmlReaderTest;
 import de.uzk.hki.da.metadata.PremisXmlReaderTests;
 import de.uzk.hki.da.metadata.PremisXmlWriterTest;
 import de.uzk.hki.da.metadata.XsltEDMGeneratorTests;
-import de.uzk.hki.da.model.CentralDatabaseDAOTests;
 import de.uzk.hki.da.model.GetNewestFilesFromAllRepresentationsTests;
 import de.uzk.hki.da.model.JobCascadingTest;
 import de.uzk.hki.da.model.ModelTest;
+import de.uzk.hki.da.model.ObjectFSTests;
 import de.uzk.hki.da.model.PackageTests;
 import de.uzk.hki.da.model.PreservationSystemTests;
 import de.uzk.hki.da.model.SaveConversionInstructionsByJob;
+import de.uzk.hki.da.pkg.ArchiveBuilderTests;
 import de.uzk.hki.da.service.RetrievePackagesHelperTest;
 import de.uzk.hki.da.service.URNCheckDigitGeneratorTests;
 import de.uzk.hki.da.service.XPathUtilsTests;
-import de.uzk.hki.da.utils.ArchiveBuilderTests;
-import de.uzk.hki.da.utils.CommaSeparatedListTests;
-import de.uzk.hki.da.utils.PathTest;
-import de.uzk.hki.da.utils.PathTypeEditorSupportTests;
 
 /**
  * The collection of all our unit tests which should run pre and post commit.
@@ -96,17 +98,14 @@ import de.uzk.hki.da.utils.PathTypeEditorSupportTests;
 	
 	PrepareSendToPresenterActionTests.class,
 	IngestAreaScannerWorkerTests.class,
-	ProperRefreshOfJobChildrenTest.class,
 	JobCascadingTest.class,
 	ConvertActionTests.class,
 	SaveConversionInstructionsByJob.class,
 	CreatePremisActionTests.class,
 	UnpackActionTests.class,
 	CLIConversionStrategyTests.class,
-	ObjectTest.class,
+	ObjectFSTests.class,
 	ConversionInstructionsBuilderTests.class,
-	CentralDatabaseDAOTests.class,
-	SelectProcessingNodesTests.class,
 	ActionFactoryTests.class,
 	RetrievePackagesHelperTest.class,
 	ActionRegistryTests.class,
@@ -114,15 +113,13 @@ import de.uzk.hki.da.utils.PathTypeEditorSupportTests;
 	BuildAIPActionTests.class,
 	ModelTest.class,
 	ConvertCheckActionTests.class,
-	ConvertActionNodeSplittingTests.class,
 	ConverterServiceTests.class,
 	ScanActionTests.class,
 	ArchiveBuilderTests.class,
-	FormatScanServiceTests.class,
 	FetchPIPsActionTest.class,
 	PreservationSystemTests.class,
 	GetNewestFilesFromAllRepresentationsTests.class,
-	RetrievalActionTest.class,
+	RetrievalActionTests.class,
 	PremisXmlWriterTest.class,
 	IrodsGridFacadeTest.class,
 	PublishImageConversionStrategyTest.class,
@@ -137,7 +134,6 @@ import de.uzk.hki.da.utils.PathTypeEditorSupportTests;
 	IntegrityScannerWorkerTest.class,
 	ShortenFileNamesActionTests.class,
 	XPathUtilsTests.class,
-	CommaSeparatedListTests.class,
 	CheckFormatsActionTest.class,
 	PdfConversionStrategyTest.class,
 	PublishPDFConversionStrategyTests.class,
@@ -147,7 +143,6 @@ import de.uzk.hki.da.utils.PathTypeEditorSupportTests;
 	PDFServiceTests.class,
 	PackageTests.class,
 	ArchiveReplicationActionTests.class,
-	FidoCLITest.class,
 	UpdateMetadataActionEADTests.class,
 	DeleteObjectActionTests.class,
 	UpdateMetadataActionXMPTests.class,
@@ -158,12 +153,20 @@ import de.uzk.hki.da.utils.PathTypeEditorSupportTests;
 	XsltEDMGeneratorTests.class,
 	SendToPresenterActionTests.class,
 	CreateEDMActionTests.class,
-	IndexMetadataActionTests.class,
 	UpdateMetadataActionEADMultilevelPackagesTest.class,
 	UpdateMetadataActionLIDOTests.class,
-	IndexMetadataActionTests.class,
 	RestructureActionTests.class,
-	ValidateMetadataActionTests.class
+	ValidateMetadataActionTests.class,
+	ProcessUserDecisionsActionTests.class,
+	FakeFileFormatFacadeTests.class,
+	UpdateMetadataRheinlaender.class,
+	SecondaryFormatScanTests.class,
+	RestartIngestWorkflowActionTests.class,
+	PostRetrievalActionTest.class,
+	NewActionRegistryTests.class,
+	SmartActionFactoryTests.class,
+	JobManagerTests.class,
+	PublicationMetadataSubformatIdentifierTests.class
 })
 public class SimpleSuite {
 

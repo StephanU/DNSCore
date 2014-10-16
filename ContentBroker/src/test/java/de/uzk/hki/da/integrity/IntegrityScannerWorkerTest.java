@@ -19,10 +19,11 @@
 package de.uzk.hki.da.integrity;
 
 import static org.junit.Assert.assertEquals;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 import static org.mockito.Matchers.anyObject;
 import static org.mockito.Matchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 import java.io.IOException;
 
 import org.junit.After;
@@ -30,15 +31,14 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import de.uzk.hki.da.core.HibernateUtil;
 import de.uzk.hki.da.grid.IrodsGridFacade;
 import de.uzk.hki.da.grid.IrodsSystemConnector;
-import de.uzk.hki.da.model.CentralDatabaseDAO;
-import de.uzk.hki.da.model.Contractor;
 import de.uzk.hki.da.model.Node;
 import de.uzk.hki.da.model.Object;
 import de.uzk.hki.da.model.Package;
+import de.uzk.hki.da.model.PreservationSystem;
 import de.uzk.hki.da.model.StoragePolicy;
+import de.uzk.hki.da.model.User;
 
 
 /**
@@ -54,9 +54,6 @@ public class IntegrityScannerWorkerTest {
 	
 	/** The worker. */
 	IntegrityScannerWorker worker = new IntegrityScannerWorker();
-	
-	/** The dao. */
-	CentralDatabaseDAO dao;
 	
 	/** The urn. */
 	String urn = "123456";
@@ -81,7 +78,9 @@ public class IntegrityScannerWorkerTest {
 	@Before
 	public void setUp() throws IOException{
 		
-		dao = mock(CentralDatabaseDAO.class);
+		PreservationSystem pSystem = new PreservationSystem();
+		pSystem.setMinRepls(3);
+		
 		obj = new Object();
 		
 		Package pack1 = new Package();
@@ -93,10 +92,11 @@ public class IntegrityScannerWorkerTest {
 		obj.getPackages().add(pack2);
 		obj.setObject_state(66);
 		obj.setIdentifier(urn);
-		obj.setContractor(new Contractor("TEST","",""));
+		obj.setContractor(new User("TEST","",""));
 		Node node = new Node("test");
 		sp = new StoragePolicy(node);
-		worker.setMinNodes(3);
+		
+		worker.setpSystem(pSystem);;
 	}
 	
 	
@@ -139,6 +139,7 @@ public class IntegrityScannerWorkerTest {
 		when (gc.isValid(package1Path)).thenReturn(true);
 		when (gc.storagePolicyAchieved(anyString(),(StoragePolicy) anyObject())).thenReturn(true);
 		when (gc.isValid(package2Path)).thenReturn(false);
+		worker.setSleepFor(1000L);
 		worker.setGridFacade(gc);
 		
 		assertEquals(51,worker.checkObjectValidity(obj));

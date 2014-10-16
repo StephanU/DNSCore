@@ -35,34 +35,33 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import de.uzk.hki.da.core.C;
 import de.uzk.hki.da.core.HibernateUtil;
+import de.uzk.hki.da.core.Path;
 import de.uzk.hki.da.model.Object;
-import de.uzk.hki.da.utils.C;
-import de.uzk.hki.da.utils.Path;
 
 
 /**
  * Relates to AK-T Audit 
- * @author jpeters
+ * @author Jens Peters
  * 
  */
-public class ATUseCaseAudit extends Base{
+public class ATUseCaseAudit extends AcceptanceTest{
 	
 	private static final String ORIGINAL_NAME = "ATUseCaseAudit";
-	private static final String CONTAINER_NAME = ORIGINAL_NAME+"."+C.TGZ;
+	private static final String CONTAINER_NAME = ORIGINAL_NAME+"."+C.FILE_EXTENSION_TGZ;
 	private static final String IDENTIFIER =   "ATUseCaseAuditIdentifier";
 	private static final Path archiveStoragePath = Path.make("/ci/archiveStorage/aip/TEST/");
 	private Object object = null;
 	
 	@Before
 	public void setUp() throws IOException{
-		setUpBase();
 		
 		// set object to older creationdate than one day
 		Calendar now = Calendar.getInstance();
 		now.add(Calendar.HOUR_OF_DAY, -25);
 		
-		object = putPackageToStorage(IDENTIFIER,ORIGINAL_NAME,CONTAINER_NAME,now.getTime(),100 );
+		object = ath.putPackageToStorage(IDENTIFIER,ORIGINAL_NAME,CONTAINER_NAME,now.getTime(),100 );
 	}
 	
 	@After
@@ -74,17 +73,14 @@ public class ATUseCaseAudit extends Base{
 		}catch(Exception e){
 			System.out.println(e.getMessage());
 		}
-		
-		clearDB();
-		cleanStorage();
 	}
 	
 	@Test
 	public void testHappyPath() throws Exception {
-		//ingest(ORIGINAL_NAME);
+		
 		Session session = HibernateUtil.openSession();
 		session.beginTransaction();
-		object = dao.getUniqueObject(session, ORIGINAL_NAME, "TEST");
+		object = ath.getUniqueObject(session, ORIGINAL_NAME, "TEST");
 		session.close();
 		// We'll destroy it now, if we 're on CI
 		// on dev machines FakeGridFacade will find special file in ATUseCaseAudit
@@ -117,7 +113,7 @@ public class ATUseCaseAudit extends Base{
 			Thread.sleep(6000);
 			Session session = HibernateUtil.openSession();
 			session.beginTransaction();
-			Object object = dao.getUniqueObject(session, ORIGINAL_NAME, C.TEST_USER_SHORT_NAME);
+			Object object = ath.getUniqueObject(session, ORIGINAL_NAME, C.TEST_USER_SHORT_NAME);
 			session.close();		
 			if (object!=null){
 				

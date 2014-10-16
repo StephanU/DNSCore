@@ -33,14 +33,15 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import de.uzk.hki.da.core.C;
 import de.uzk.hki.da.core.IngestGate;
+import de.uzk.hki.da.core.Path;
+import de.uzk.hki.da.core.RelativePath;
 import de.uzk.hki.da.core.UserException;
 import de.uzk.hki.da.model.Job;
 import de.uzk.hki.da.model.Object;
-import de.uzk.hki.da.utils.C;
-import de.uzk.hki.da.utils.Path;
-import de.uzk.hki.da.utils.RelativePath;
-import de.uzk.hki.da.utils.TESTHelper;
+import de.uzk.hki.da.model.PreservationSystem;
+import de.uzk.hki.da.test.TESTHelper;
 
 
 /**
@@ -59,6 +60,7 @@ public class UnpackActionTests {
 	private static final String BAGIT_PACKAGE = "bagitPackage.tgz";
 	private static final String DUPLICATE_DOCUMENTS_PACKAGE = "duplicateDocuments.tgz";
 	private static final String WHEN_DUPLICATES_PACKAGE = "whenDuplicatesAreNotDuplicates.tgz";
+	private static final String SIDECAR_UPPERCASE_PACKAGE = "SidecarFileWithUppercaseExtension.tgz";
 	private static final String SIDECAR_FILES_PACKAGE = "sidecarFiles.tgz";
 	private static final String SIDECAR_FILES_PACKAGE_WHICH_BROKE = "LVR_ILR_4_PDF_TF18.tar";
 
@@ -70,7 +72,9 @@ public class UnpackActionTests {
 
 	private UnpackAction action = new UnpackAction();
 	private Object o;
-
+	private static final PreservationSystem pSystem = new PreservationSystem();
+	
+	
 	/**
 	 * Sets the up.
 	 * @throws IOException Signals that an I/O exception has occurred.
@@ -82,7 +86,7 @@ public class UnpackActionTests {
 		FileUtils.copyFileToDirectory(C.PREMIS_XSD, new File(CONF));
 		FileUtils.copyFileToDirectory(C.XLINK_XSD, new File(CONF));
 		
-		o = TESTHelper.setUpObject(IDENTIFIER, new RelativePath(workAreaRootPath), new RelativePath(workAreaRootPath,INGEST));
+		o = TESTHelper.setUpObject(IDENTIFIER, new RelativePath(workAreaRootPath), new RelativePath(workAreaRootPath,INGEST), new RelativePath(workAreaRootPath,INGEST));
 		action.setLocalNode(o.getTransientNodeRef());
 		
 		gate.setWorkAreaRootPath(workAreaRootPath.toString());
@@ -92,6 +96,7 @@ public class UnpackActionTests {
 		action.setJob(new Job());
 		action.setObject(o);
 		action.setIngestGate(gate);
+		action.setPSystem(pSystem);
 	}
 
 	/**
@@ -113,6 +118,8 @@ public class UnpackActionTests {
 		Path.makeFile(csnPath,SIDECAR_FILES_PACKAGE).delete();
 		Path.makeFile(ingestPath,WHEN_DUPLICATES_PACKAGE).delete();
 		Path.makeFile(csnPath,WHEN_DUPLICATES_PACKAGE).delete();
+		Path.makeFile(csnPath,SIDECAR_UPPERCASE_PACKAGE).delete();
+		Path.makeFile(ingestPath,SIDECAR_UPPERCASE_PACKAGE).delete();
 
 	}
 
@@ -171,7 +178,7 @@ public class UnpackActionTests {
 		FileUtils.copyFile(Path.makeFile(ingestPath,SIDECAR_FILES_PACKAGE+"_"),Path.makeFile(ingestPath,SIDECAR_FILES_PACKAGE));
 		o.getPackages().get(0).setContainerName(SIDECAR_FILES_PACKAGE);
 	
-		action.setSidecarExtensions(SIDECAR_EXTENSIONS);
+		pSystem.setSidecarExtensions(SIDECAR_EXTENSIONS);
 		try{
 			action.implementation();
 		}catch(UserException e){
@@ -191,7 +198,7 @@ public class UnpackActionTests {
 		FileUtils.copyFile(Path.makeFile(ingestPath,SIDECAR_FILES_PACKAGE_WHICH_BROKE+"_"),Path.makeFile(ingestPath,SIDECAR_FILES_PACKAGE_WHICH_BROKE));
 		o.getPackages().get(0).setContainerName(SIDECAR_FILES_PACKAGE_WHICH_BROKE);
 	
-		action.setSidecarExtensions(SIDECAR_EXTENSIONS);
+		pSystem.setSidecarExtensions(SIDECAR_EXTENSIONS);
 		try{
 			action.implementation();
 		}catch(UserException e){
@@ -200,6 +207,19 @@ public class UnpackActionTests {
 	}
 	
 	
+	@Test
+	public void acceptSidecarFile_withUppercaseExtension() throws IOException{
+		
+		FileUtils.copyFile(Path.makeFile(ingestPath,SIDECAR_UPPERCASE_PACKAGE+"_"),Path.makeFile(ingestPath,SIDECAR_UPPERCASE_PACKAGE));
+		o.getPackages().get(0).setContainerName(SIDECAR_UPPERCASE_PACKAGE);
+		
+		pSystem.setSidecarExtensions(SIDECAR_EXTENSIONS);
+		try{
+			action.implementation();
+		}catch(UserException e){
+			fail(e.getMessage());
+		}
+	}
 	
 	
 	@Test
@@ -208,7 +228,7 @@ public class UnpackActionTests {
 		FileUtils.copyFile(Path.makeFile(ingestPath,SIDECAR_FILES_PACKAGE+"_"),Path.makeFile(ingestPath,SIDECAR_FILES_PACKAGE));
 		o.getPackages().get(0).setContainerName(SIDECAR_FILES_PACKAGE);
 	
-		action.setSidecarExtensions(SIDECAR_EXTENSIONS_COMMA_SPLIT);
+		pSystem.setSidecarExtensions(SIDECAR_EXTENSIONS_COMMA_SPLIT);
 		try{
 			action.implementation();
 		}catch(UserException e){
@@ -223,7 +243,7 @@ public class UnpackActionTests {
 		FileUtils.copyFile(Path.makeFile(ingestPath,SIDECAR_FILES_PACKAGE+"_"),Path.makeFile(ingestPath,SIDECAR_FILES_PACKAGE));
 		o.getPackages().get(0).setContainerName(SIDECAR_FILES_PACKAGE);
 	
-		action.setSidecarExtensions(SIDECAR_EXTENSIONS_SEMIKOLON_SPLIT);
+		pSystem.setSidecarExtensions(SIDECAR_EXTENSIONS_SEMIKOLON_SPLIT);
 		try{
 			action.implementation();
 		}catch(UserException e){

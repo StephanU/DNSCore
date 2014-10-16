@@ -24,7 +24,7 @@
 				<thead>
 					<tr>
 					
-						<th><g:message code="conversionPolicies.contractor.label" default="Zielsystem" /></th>
+						<th><g:message code="conversionPolicies.contractor.label" default="ID" /></th>
 					
 						<th><g:message code="conversionPolicies.conversion_routine.label" default="Konversionsroutine" /></th>
 					
@@ -32,13 +32,15 @@
 					
 						<th><g:message code="conversionPolicies.conversion_routine.label" default="Zielformat" /></th>
 					
+						<th><g:message code="conversionPolicies.presentation.label" default="Presentation Repository Policy" /></th>
+					
 					</tr>
 				</thead>
 				<tbody>
 				<g:each in="${conversionPoliciesInstanceList}" status="i" var="conversionPoliciesInstance">
 					<tr class="${(i % 2) == 0 ? 'even' : 'odd'}">
 					
-						<td><g:link action="show" id="${conversionPoliciesInstance.id}">${fieldValue(bean: conversionPoliciesInstance, field: "contractor")}</g:link></td>
+						<td><g:link action="show" id="${conversionPoliciesInstance.id}">${conversionPoliciesInstance.id}</g:link></td>
 					
 						<td>${fieldValue(bean: conversionPoliciesInstance, field: "conversion_routine")}</td>
 					
@@ -46,6 +48,7 @@
 						  	 <g:link target='pronom' url="http://www.nationalarchives.gov.uk/PRONOM/${fieldValue(bean: conversionPoliciesInstance, field: "source_format")}">${fieldValue(bean: conversionPoliciesInstance, field: "source_format")}</g:link>
 						   </g:if><g:else>${fieldValue(bean: conversionPoliciesInstance, field: "source_format")}</g:else></td>
 						<td>${fieldValue(bean: conversionPoliciesInstance.conversion_routine, field: "target_suffix")}</td>
+						<td>${fieldValue(bean: conversionPoliciesInstance, field: "presentation")}</td>
 					
 					
 					</tr>

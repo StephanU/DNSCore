@@ -1,5 +1,7 @@
 package daweb3
 
+import grails.plugin.springsecurity.SpringSecurityService
+
 /*
  DA-NRW Software Suite | ContentBroker
  Copyright (C) 2013 Historisch-Kulturwissenschaftliche Informationsverarbeitung
@@ -26,13 +28,23 @@ package daweb3
  */
 class HomeController {
 
+	
+	def springSecurityService
 	def index() {
-		def admin = false;
-		if (session.contractor.admin == 1) {
-				admin = true;
+		def username = springSecurityService.currentUser
+		def admin = 0;
+		User user = User.findByUsername(username)
+		
+		if (user.authorities.any { it.authority == "ROLE_PSADMIN" 
+							}) {
+			admin = 1;
 		}
-		[admin: admin]
-		render(view:"/index")
+		if (user.authorities.any { it.authority == "ROLE_NODEADMIN"
+							}) {
+			admin = 1;
+		}
+		
+		render(view:"/index", model:[admin:admin,user:username])
 	}
 
 }

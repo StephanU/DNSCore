@@ -19,20 +19,15 @@
 
 package de.uzk.hki.da.model;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.Matchers.anyString;
-import static org.mockito.Matchers.anyObject;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import static org.junit.Assert.fail;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import org.hibernate.classic.Session;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.hibernate.Session;
+import org.junit.*;
+
+import de.uzk.hki.da.core.HibernateUtil;
 
 
 
@@ -64,18 +59,19 @@ public class PreservationSystemTests {
 	public static void tearDownAfterClass() throws Exception {
 	}
 
-	/** The preservation system. */
 	private PreservationSystem preservationSystem;
 	
 	/** The file. */
 	private DAFile file;
-	
-	/** The default c. */
-	private Contractor defaultC;
-	
-	/** The pres c. */
-	private Contractor presC;
 
+	private ConversionPolicy one;
+
+	private ConversionPolicy two;
+
+	private ConversionPolicy three;
+
+	private ConversionPolicy four;
+	
 	/**
 	 * Sets the up.
 	 *
@@ -84,17 +80,17 @@ public class PreservationSystemTests {
 	@Before
 	public void setUp() throws Exception {
 	
+		HibernateUtil.init("src/main/xml/hibernateCentralDB.cfg.xml.inmem");
+		
 		ConversionRoutine routine = new ConversionRoutine();
 		routine.setName("COPY");
 		
 		// Conversion Policies
 		List<ConversionPolicy> policies = new ArrayList<ConversionPolicy>();
-		ConversionPolicy one = new ConversionPolicy();
-		one.setId(0);
+		one = new ConversionPolicy();
 		one.setSource_format("fmt/10");
 		one.setConversion_routine(routine);
-		ConversionPolicy two = new ConversionPolicy();
-		two.setId(1);
+		two = new ConversionPolicy();
 		two.setSource_format("fmt/10");
 		two.setConversion_routine(routine);
 		policies.add(one);
@@ -102,36 +98,43 @@ public class PreservationSystemTests {
 		
 		
 		List<ConversionPolicy> policies2 = new ArrayList<ConversionPolicy>();
-		ConversionPolicy three = new ConversionPolicy();
-		three.setId(2);
+		three = new ConversionPolicy();
 		three.setSource_format("fmt/10");
 		three.setConversion_routine(routine);
-		ConversionPolicy four = new ConversionPolicy();
-		four.setId(3);
+		three.setPresentation(true);
+		four = new ConversionPolicy();
 		four.setSource_format("fmt/10");
 		four.setConversion_routine(routine);
+		four.setPresentation(true);
 		policies2.add(three);
 		policies2.add(four);
 
+		User admin = new User(); 
 		
-		defaultC = new Contractor();
-		defaultC.setShort_name("DEFAULT");
-		defaultC.setConversion_policies(policies);
+		preservationSystem = new PreservationSystem();
 		
-		presC = new Contractor();
-		presC.setShort_name("PRESENTER");
-		presC.setConversion_policies(policies2);
+		preservationSystem.setAdmin(admin);
+		preservationSystem.setMinRepls(1);
+		preservationSystem.getConversion_policies().add(one);
+		preservationSystem.getConversion_policies().add(two);
+		preservationSystem.getConversion_policies().add(three);
+		preservationSystem.getConversion_policies().add(four);
 		
-		CentralDatabaseDAO dao = mock(CentralDatabaseDAO.class);
-		when(dao.getContractor((Session) anyObject(), anyString())).thenReturn(presC).thenReturn(defaultC);
-//		when(dao.getConversionPoliciesForContractor((Contractor) anyObject())).
-//			thenReturn(policies).thenReturn(policies2);
-		preservationSystem = new PreservationSystem(dao);
-		
+		Session session = HibernateUtil.openSession();
+		session.beginTransaction();
+		session.save(admin);
+		session.save(routine);
+		session.save(one);
+		session.save(two);
+		session.save(three);
+		session.save(four);
+		session.save(preservationSystem);
+		session.getTransaction().commit();
+		session.close();
+
 		// creating a valid file
 		file = new DAFile(null,"","");
 		file.setFormatPUID("fmt/10");
-		
 		
 	}
 
@@ -142,6 +145,11 @@ public class PreservationSystemTests {
 	 */
 	@After
 	public void tearDown() throws Exception {
+		Session session = HibernateUtil.openSession();
+		session.beginTransaction();
+		session.delete(preservationSystem);
+		session.getTransaction().commit();
+		session.close();
 	}
 
 	/**
@@ -150,14 +158,14 @@ public class PreservationSystemTests {
 	@Test
 	public void testFileHasNoFileFormat(){
 		
-		file = new DAFile(null,"","");
-		file.setFormatPUID("");
-		
-		List<ConversionPolicy> policies =
-				preservationSystem.getApplicablePolicies(file, defaultC.getShort_name());
-		assertTrue(policies.isEmpty());
-				
-	}
+		DAFile fileundef = new DAFile(null,"","");
+		fileundef.setFormatPUID("");
+		try {
+			preservationSystem.getApplicablePolicies(fileundef, false);
+			fail();
+		} catch (Exception  e) {
+			
+		} 	}
 	
 	/**
 	 * Test success scenario.
@@ -166,26 +174,13 @@ public class PreservationSystemTests {
 	public void testSuccessScenario() {
 
 		List<ConversionPolicy> policies = 
-				preservationSystem.getApplicablePolicies(file,defaultC.getShort_name());
-		assertTrue(0==policies.get(0).getId());
-		assertTrue(1==policies.get(1).getId());
+				preservationSystem.getApplicablePolicies(file,false);
+		assertTrue(one.getId().equals(policies.get(0).getId()));
+		assertTrue(two.getId().equals(policies.get(1).getId()));
 		
 		List<ConversionPolicy> policies2 = 
-				preservationSystem.getApplicablePolicies(file,presC.getShort_name());
-		assertTrue(2==policies2.get(0).getId());
-		assertTrue(3==policies2.get(1).getId());
+				preservationSystem.getApplicablePolicies(file,true);
+		assertTrue(three.getId().equals(policies2.get(0).getId()));
+		assertTrue(four.getId().equals(policies2.get(1).getId()));
 	}
-	
-	/**
-	 * Test no policies for contractor.
-	 */
-	@Test
-	public void testNoPoliciesForContractor(){
-		List<ConversionPolicy> policies = 
-				preservationSystem.getApplicablePolicies(file,"NOT_EXISTENT");
-		assertTrue(policies.isEmpty());
-	}
-	
-	
-
 }

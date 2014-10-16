@@ -29,10 +29,10 @@ import org.apache.commons.io.FilenameUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import de.uzk.hki.da.core.Path;
 import de.uzk.hki.da.model.ConversionInstruction;
 import de.uzk.hki.da.model.DAFile;
 import de.uzk.hki.da.model.Event;
-import de.uzk.hki.da.utils.Path;
 import de.uzk.hki.da.utils.Utilities;
 
 
@@ -52,6 +52,7 @@ public class PublishCLIConversionStrategy extends CLIConversionStrategy {
 	/* (non-Javadoc)
 	 * @see de.uzk.hki.da.convert.CLIConversionStrategy#convertFile(de.uzk.hki.da.model.ConversionInstruction)
 	 */
+	@Override
 	public List<Event> convertFile(ConversionInstruction ci) throws FileNotFoundException {
 		if (pkg==null) throw new IllegalStateException("Package not set");
 		

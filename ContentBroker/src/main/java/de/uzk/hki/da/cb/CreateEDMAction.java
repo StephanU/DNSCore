@@ -35,11 +35,13 @@ import org.jdom.JDOMException;
 import org.jdom.Namespace;
 import org.jdom.input.SAXBuilder;
 
+import de.uzk.hki.da.action.AbstractAction;
+import de.uzk.hki.da.core.C;
 import de.uzk.hki.da.core.ConfigurationException;
+import de.uzk.hki.da.metadata.XMLUtils;
 import de.uzk.hki.da.metadata.XsltEDMGenerator;
 import de.uzk.hki.da.repository.RepositoryException;
 import de.uzk.hki.da.repository.RepositoryFacade;
-import de.uzk.hki.da.utils.XMLUtils;
 
 /**
  * This action transforms the primary metadata of an
@@ -54,43 +56,55 @@ import de.uzk.hki.da.utils.XMLUtils;
  */
 public class CreateEDMAction extends AbstractAction {
 	
-	private static final String COLLNAME = "danrw";
 	private RepositoryFacade repositoryFacade;
-	private String choBaseUri;
-	private String aggrBaseUri;
-	private String localBaseUri;
 	private Map<String,String> edmMappings;
 
+	/**
+	 * @
+	 */
 	@Override
-	boolean implementation() throws IOException, RepositoryException {
-		if (choBaseUri==null||choBaseUri.isEmpty()) throw new ConfigurationException("choBaseUri not set");
-		if (aggrBaseUri==null||aggrBaseUri.isEmpty()) throw new ConfigurationException("aggrBaseUri not set");
-		if (localBaseUri==null||localBaseUri.isEmpty()) throw new ConfigurationException("localBaseUri not set");
+	public void checkActionSpecificConfiguration() throws ConfigurationException {
 		if (repositoryFacade == null) 
 			throw new ConfigurationException("Repository facade object not set. Make sure the action is configured properly");
+	}
+
+
+
+	@Override
+	public void checkSystemStatePreconditions() throws IllegalStateException {
+		if (preservationSystem.getUrisCho()==null||preservationSystem.getUrisCho().isEmpty()) throw new IllegalStateException("choBaseUri not set");
+		if (preservationSystem.getUrisAggr()==null||preservationSystem.getUrisAggr().isEmpty()) throw new IllegalStateException("aggrBaseUri not set");
+		if (preservationSystem.getUrisLocal()==null||preservationSystem.getUrisLocal().isEmpty()) throw new IllegalStateException("localBaseUri not set");
 		if (edmMappings == null)
-			throw new ConfigurationException("edmMappings not set.");
+			throw new IllegalStateException("edmMappings not set.");
 		for (String filePath:edmMappings.values())
 			if (!new File(filePath).exists())
-				throw new ConfigurationException("mapping file "+filePath+" does not exist");
+				throw new IllegalStateException("mapping file "+filePath+" does not exist");
 		
+		
+	}
+
+
+
+	@Override
+	public boolean implementation() throws IOException, RepositoryException {
 		
 		String objectId = object.getIdentifier();
 		
-		InputStream dcStream = getDCdatastreamFromPresRepo(objectId, COLLNAME);
+		InputStream dcStream = getDCdatastreamFromPresRepo(objectId, preservationSystem.getOpenCollectionName());
 
 		String packageType = parseFormatElement(dcStream);
 		if (packageType == null) {
-			logger.warn("No format element found in DC. EDM cannot be created!");
+			logger.warn("No format element found in DC. "+C.EDM_METADATA_STREAM_ID+" cannot be created!");
 			return true;
 		}
 		
 		String xsltFile = getEdmMappings().get(packageType);
 		if (xsltFile == null) {
-			throw new RuntimeException("No conversion available for package type '" + packageType + "'. EDM can not be created.");
+			throw new RuntimeException("No conversion available for package type '" + packageType + "'. "+C.EDM_METADATA_STREAM_ID+" can not be created.");
 		}
 		
-		InputStream metadataStream = repositoryFacade.retrieveFile(objectId,COLLNAME, packageType);
+		InputStream metadataStream = repositoryFacade.retrieveFile(objectId,preservationSystem.getOpenCollectionName(), packageType);
 		if (metadataStream==null){
 			throw new RuntimeException("Could not retrieve some of the metadata files  : " + packageType);
 		}
@@ -99,7 +113,7 @@ public class CreateEDMAction extends AbstractAction {
 		logger.debug(edmResult);
 		
 		try {
-			repositoryFacade.createMetadataFile(objectId,COLLNAME, "EDM", edmResult, "Object representation in Europeana Data Model", "application/rdf+xml");
+			repositoryFacade.createMetadataFile(objectId,preservationSystem.getOpenCollectionName(), C.EDM_METADATA_STREAM_ID, edmResult, "Object representation in Europeana Data Model", "application/rdf+xml");
 		} catch (RepositoryException e) {
 			throw new RuntimeException(e);
 		}
@@ -111,6 +125,13 @@ public class CreateEDMAction extends AbstractAction {
 
 	
 	
+	@Override
+	public void rollback() throws Exception {
+		throw new NotImplementedException();	
+	}
+
+
+
 	private String generateEDM(String objectId, String xsltFile,
 			InputStream metadataStream) throws FileNotFoundException {
 		
@@ -121,9 +142,9 @@ public class CreateEDMAction extends AbstractAction {
 			throw new RuntimeException(e1);
 		}	
 		edmGenerator.setParameter("urn", object.getUrn());
-		edmGenerator.setParameter("cho-base-uri", choBaseUri + "/" + objectId);
-		edmGenerator.setParameter("aggr-base-uri", aggrBaseUri + "/" + objectId);
-		edmGenerator.setParameter("local-base-uri", localBaseUri);
+		edmGenerator.setParameter("cho-base-uri", preservationSystem.getUrisCho() + "/" + objectId);
+		edmGenerator.setParameter("aggr-base-uri", preservationSystem.getUrisAggr() + "/" + objectId);
+		edmGenerator.setParameter("local-base-uri", preservationSystem.getUrisLocal());
 		String edmResult=null;
 		try {
 			edmResult = edmGenerator.generate();
@@ -184,69 +205,6 @@ public class CreateEDMAction extends AbstractAction {
 	
 	
 	
-	@Override
-	void rollback() throws Exception {
-		throw new NotImplementedException();	
-	}
-
-	/**
-	 * Gets the base URI that will be prepended to the
-	 * object ID in order to coin a URI for Cultural
-	 * Heritage Objects in the EDM data.
-	 * @return the base URI
-	 */
-	public String getChoBaseUri() {
-		return choBaseUri;
-	}
-	
-	/**
-	 * Sets the base URI that will be prepended to the
-	 * object ID in order to coin a URI for Cultural
-	 * Heritage Objects in the EDM data.
-	 * @param the base URI
-	 */
-	public void setChoBaseUri(String choBaseUri) {
-		this.choBaseUri = choBaseUri;
-	}
-
-	/**
-	 * Gets the base URI that will be prepended to the
-	 * object ID in order to coin a URI for Aggregations
-	 * in the EDM data.
-	 * @return the base URI
-	 */
-	public String getAggrBaseUri() {
-		return aggrBaseUri;
-	}
-
-	/**
-	 * Sets the base URI that will be prepended to the
-	 * object ID in order to coin a URI for Aggregations
-	 * in the EDM data.
-	 * @param the base URI
-	 */
-	public void setAggrBaseUri(String aggrBaseUri) {
-		this.aggrBaseUri = aggrBaseUri;
-	}
-
-	/**
-	 * Gets the base URI that will be prepended to the
-	 * relative IDs in the EDM data.
-	 * @return the base URI
-	 */
-	public String getLocalBaseUri() {
-		return localBaseUri;
-	}
-	
-	/**
-	 * Sets the base URI that will be prepended to the
-	 * relative IDs in the EDM data.
-	 * @param the base URI
-	 */
-	public void setLocalBaseUri(String localBaseUri) {
-		this.localBaseUri = localBaseUri;
-	}
-
 	/**
 	 * Gets the map that describes which XSLTs should be
 	 * used to convert Metadata to EDM.

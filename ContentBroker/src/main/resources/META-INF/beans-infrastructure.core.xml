@@ -20,7 +20,7 @@
 		</property>
 	</bean>	
 	
-	<bean id="customPropertyEditorRegistrar" class="de.uzk.hki.da.utils.CustomPropertyEditorRegistrar"/>
+	<bean id="customPropertyEditorRegistrar" class="de.uzk.hki.da.core.CustomPropertyEditorRegistrar"/>
 
 	<bean class="org.springframework.beans.factory.config.CustomEditorConfigurer">
 		<property name="propertyEditorRegistrars">
@@ -32,22 +32,23 @@
 	
 	<bean id="localNode" class="de.uzk.hki.da.model.Node">
 		<property name="workAreaRootPath" value="${localNode.workAreaRootPath}"/>
-        <property name="userAreaRootPath" value="${localNode.userAreaRootPath}" />
-        <property name="ingestAreaRootPath" value="${localNode.ingestAreaRootPath}" />
-        <property name="gridCacheAreaRootPath" value="${localNode.gridCacheAreaRootPath}" />
+        <property name="userAreaRootPath" value="${localNode.userAreaRootPath:_}" />
+        <property name="ingestAreaRootPath" value="${localNode.ingestAreaRootPath:_}" />
+        <property name="gridCacheAreaRootPath" value="${localNode.gridCacheAreaRootPath:_}" />
         <property name="workingResource" value="${localNode.workingResource}" />
-        <property name="adminEmail" value="${localNode.admin_email}" />    
         <property name="id" value="${localNode.id}" />
         <property name="replDestinations" value="${localNode.replDestinations}" />
    	</bean>
            
     <bean id="fakeDistributedConversionAdapter" class="de.uzk.hki.da.grid.FakeDistributedConversionAdapter"/>
      <bean id="fakeGridFacade" class="de.uzk.hki.da.grid.FakeGridFacade">
-		<property name="gridCacheAreaRootPath" value="${localNode.gridCacheAreaRootPath}" />
+		<property name="gridCacheAreaRootPath" value="${localNode.gridCacheAreaRootPath:_}" />
 	</bean>
     <bean id="fakeRepositoryFacade" class="de.uzk.hki.da.repository.FakeRepositoryFacade">
         <property name="workAreaRootPath" value="${localNode.workAreaRootPath}" />
 	</bean>  
+    <bean id="fakeFileFormatFacade" class="de.uzk.hki.da.ff.FakeFileFormatFacade"/>
+ 
     
     <amq:broker id="mqBroker" useShutdownHook="true" useJmx="false" deleteAllMessagesOnStartup="true" start="false">
     <amq:systemUsage>
@@ -65,5 +66,4 @@
   <amq:connectionFactory brokerURL="tcp://localhost:${cb.serverSocketNumber}"
   id="mqConnectionFactory" />
   
-  <bean class="de.uzk.hki.da.model.CentralDatabaseDAO" id="centralDao"/>
  </beans>

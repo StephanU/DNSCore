@@ -19,7 +19,7 @@ then
 	then
 		echo you chose a development environment as target environment. call
 		echo "./install.sh dev <contentBrokerInstallationRootPath>"
-		exit
+		exit 1
 	fi
 	INSTALL_PATH=$2
 	if [[ "${INSTALL_PATH:${#INSTALL_PATH}-1}" == "/" ]]; then
@@ -27,12 +27,12 @@ then
 	fi	
 	if [ ! -d "$INSTALL_PATH" ]; then
 		echo Error: $INSTALL_PATH is not a directory.
-	  	exit
+	  	exit 1
 	fi
 	HOME=`pwd`
 	if [ $INSTALL_PATH = $HOME ]; then 
 		echo Error target environment $INSTALL_PATH and current src tree are identical!
-		exit
+		exit 1
 	fi
 else 
 	INSTALL_PATH=/ci/ContentBroker
@@ -129,10 +129,15 @@ cp src/main/conf/config.properties.$1 conf/config.properties
 java -jar target/ContentBroker-SNAPSHOT.jar createSchema
 src/main/bash/populatetestdb.sh populate $1
 
+
+## remove some stuff so that the installer can make the real files out of the template files again
 rm $INSTALL_PATH/conf/beans.xml
 rm $INSTALL_PATH/conf/config.properties
 rm $INSTALL_PATH/conf/hibernateCentralDB.cfg.xml
-rm $INSTALL_PATH/actionCommunicatorService.recovery
+rm $INSTALL_PATH/conf/logback.xml
+rm $INSTALL_PATH/ContentBroker_start.sh
+rm $INSTALL_PATH/ContentBroker_stop.sh
+
 
 install $INSTALL_PATH $BEANS
 # TODO 1. really needed on a ci machine? 2. duplication with installer?
@@ -141,4 +146,11 @@ cp src/main/bash/ffmpeg.sh.fake $INSTALL_PATH/ffmpeg.sh
 cp $INSTALL_PATH/conf/config.properties conf/
 
 startContentBroker $INSTALL_PATH
+
+
+## in case fake jhove will get used
+echo -e "<fakejhove>\n</fakejhove>" > /tmp/abc.txt
+
+
+
 

@@ -32,15 +32,18 @@ import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.io.filefilter.TrueFileFilter;
 
+import de.uzk.hki.da.action.AbstractAction;
+import de.uzk.hki.da.core.ConfigurationException;
 import de.uzk.hki.da.core.IngestGate;
+import de.uzk.hki.da.core.Path;
 import de.uzk.hki.da.core.UserException;
 import de.uzk.hki.da.core.UserException.UserExceptionId;
-import de.uzk.hki.da.metadata.PremisXmlValidator;
-import de.uzk.hki.da.utils.ArchiveBuilder;
-import de.uzk.hki.da.utils.ArchiveBuilderFactory;
-import de.uzk.hki.da.utils.BagitConsistencyChecker;
-import de.uzk.hki.da.utils.ConsistencyChecker;
-import de.uzk.hki.da.utils.Path;
+import de.uzk.hki.da.model.PremisXmlValidator;
+import de.uzk.hki.da.pkg.ArchiveBuilder;
+import de.uzk.hki.da.pkg.ArchiveBuilderFactory;
+import de.uzk.hki.da.pkg.BagitConsistencyChecker;
+import de.uzk.hki.da.pkg.ConsistencyChecker;
+import de.uzk.hki.da.utils.Utilities;
 
 /**
  * If there is sufficient space on the WorkArea, fetches the container (named object.package.containername)
@@ -67,15 +70,22 @@ public class UnpackAction extends AbstractAction {
 	
 	private enum PackageType{ BAGIT, METS }
 	
-	public UnpackAction(){}
+	public UnpackAction(){SUPPRESS_OBJECT_CONSISTENCY_CHECK = true;}
 	
 	private IngestGate ingestGate;
 	
-	private String[] sidecarExtensions;
-	
-	
-	boolean implementation() throws IOException{
-		if (sidecarExtensions==null) sidecarExtensions = new String[]{};
+	@Override
+	public void checkActionSpecificConfiguration() throws ConfigurationException {
+		// Auto-generated method stub
+	}
+
+	@Override
+	public void checkSystemStatePreconditions() throws IllegalStateException {
+		// Auto-generated method stub
+	}
+
+	@Override
+	public boolean implementation() throws IOException{
 		
 		Path absoluteSIPPath = Path.make(
 				localNode.getIngestAreaRootPath(),
@@ -89,7 +99,6 @@ public class UnpackAction extends AbstractAction {
 		
 		String sipInForkPath = copySIPToWorkArea(absoluteSIPPath);
 		unpack(new File(sipInForkPath),object.getPath().toString());
-		
 		
 		throwUserExceptionIfDuplicatesExist();
 		throwUserExceptionIfNotBagitConsistent();
@@ -106,6 +115,20 @@ public class UnpackAction extends AbstractAction {
 
 
 	
+	@Override
+	public void rollback() throws IOException {
+		FileUtils.deleteDirectory(Path.make(object.getPath()).toFile());
+		
+		new File(localNode.getWorkAreaRootPath() + object.getContractor().getShort_name() + "/" + 
+				object.getLatestPackage().getContainerName()).delete();
+		
+		object.getLatestPackage().getFiles().clear();
+		job.setRep_name("");
+	}
+
+
+
+
 	private void throwUserExceptionIfNotPremisConsistent() throws IOException {
 		
 		try {
@@ -114,8 +137,6 @@ public class UnpackAction extends AbstractAction {
 		} catch (FileNotFoundException e1) {
 			throw new UserException(UserExceptionId.SIP_PREMIS_NOT_FOUND, "Couldn't find PREMIS file", e1);
 		}
-
-		
 	}
 
 
@@ -141,7 +162,7 @@ public class UnpackAction extends AbstractAction {
 			
 			boolean isOKWhenSidecarFilesAreSubtracted = false;
 			for (File file:duplicates.get(duplicate)){
-				if (hasSidecarExtension(file)&&(duplicates.get(duplicate).size()-1)==1) {
+				if (Utilities.hasSidecarExtension(file.getAbsolutePath(),preservationSystem.getSidecarExtensions())&&(duplicates.get(duplicate).size()-1)==1) {
 					isOKWhenSidecarFilesAreSubtracted=true;
 					break;
 				}
@@ -160,21 +181,6 @@ public class UnpackAction extends AbstractAction {
 		}
 	}
 
-	
-	/**
-	 * @param file
-	 * @return
-	 * @author Daniel M. de Oliveira
-	 */
-	private boolean hasSidecarExtension(File file){
-		for (int i=0;i<sidecarExtensions.length;i++){
-			if (FilenameUtils.getExtension(file.toString()).equals(sidecarExtensions[i])){
-				return true;
-			}
-		}
-		return false;
-	}
-	
 	
 	
 	/**
@@ -403,33 +409,11 @@ public class UnpackAction extends AbstractAction {
 
 	
 
-	@Override
-	void rollback() throws IOException {
-		FileUtils.deleteDirectory(Path.make(object.getPath()).toFile());
-		
-		new File(localNode.getWorkAreaRootPath() + object.getContractor().getShort_name() + "/" + 
-				object.getLatestPackage().getContainerName()).delete();
-		
-		object.getLatestPackage().getFiles().clear();
-		job.setRep_name("");
-	}
-
 	public IngestGate getIngestGate() {
 		return ingestGate;
 	}
 
 	public void setIngestGate(IngestGate ingestGate) {
 		this.ingestGate = ingestGate;
-	}
-
-	public String getSidecarExtensions() {
-		return sidecarExtensions.toString();
-	}
-
-	public void setSidecarExtensions(String sidecarFiles) {
-		if (sidecarFiles.contains(","))
-			this.sidecarExtensions = sidecarFiles.split(",");
-		else
-			this.sidecarExtensions = sidecarFiles.split(";");
 	}
 }

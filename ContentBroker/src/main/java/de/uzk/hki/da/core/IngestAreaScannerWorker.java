@@ -22,6 +22,7 @@ package de.uzk.hki.da.core;
 import java.io.File;
 import java.io.FilenameFilter;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,11 +32,10 @@ import org.hibernate.Session;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import de.uzk.hki.da.model.CentralDatabaseDAO;
-import de.uzk.hki.da.model.Contractor;
+import de.uzk.hki.da.model.Job;
 import de.uzk.hki.da.model.Node;
 import de.uzk.hki.da.model.Object;
-import de.uzk.hki.da.service.RegisterObjectService;
+import de.uzk.hki.da.model.User;
 import de.uzk.hki.da.utils.Utilities;
 
 
@@ -71,6 +71,7 @@ public class IngestAreaScannerWorker {
 		/* (non-Javadoc)
 		 * @see java.io.FilenameFilter#accept(java.io.File, java.lang.String)
 		 */
+		@Override
 		public boolean accept(File dir, String name) {
 			return (name.endsWith(".zip")
 					||name.endsWith(".tar.gz")
@@ -87,11 +88,6 @@ public class IngestAreaScannerWorker {
 	
 	/** The local node name. */
 	private String localNodeId;
-	
-	/**
-	 * 
-	 */
-	private CentralDatabaseDAO dao = null;
 	
 	/** The register object service. */
 	private RegisterObjectService registerObjectService;
@@ -126,12 +122,6 @@ public class IngestAreaScannerWorker {
 	 */
 	public void scheduleTask(){
 		
-		if (dao==null) {
-			logger.warn("dao is not set yet");
-			return;
-		}
-	
-		
 		try {
 		
 			long currentTimeStamp = System.currentTimeMillis();
@@ -140,7 +130,7 @@ public class IngestAreaScannerWorker {
 			
 				Session session = HibernateUtil.openSession();
 				session.beginTransaction();
-				Contractor contractor = dao.getContractor(session, contractorShortName);
+				User contractor = getContractor(session, contractorShortName);
 				session.close();
 				
 				
@@ -154,7 +144,7 @@ public class IngestAreaScannerWorker {
 					
 					Session session2 = HibernateUtil.openSession();
 					session2.beginTransaction();
-					dao.insertJobIntoQueue(
+					insertJobIntoQueue(
 							session2,
 							contractor, 
 							convertMaskedSlashes(FilenameUtils.removeExtension(child)),
@@ -171,6 +161,52 @@ public class IngestAreaScannerWorker {
 		}
 			
 	}
+	
+	/**
+	 * Insert job into queue.
+	 *
+	 * @param contractorShortName the contractor short name
+	 * @param origName the orig name
+	 * @param responsibleNodeName the initial node name
+	 * @return the job
+	 */
+	private Job insertJobIntoQueue(Session session, User c,String origName,String responsibleNodeId,Object object){
+
+		Node node = (Node) session.get(Node.class,Integer.parseInt(responsibleNodeId));
+		
+		Job job = new Job();
+		job.setObject(object);
+		
+		job.setStatus("110");
+		job.setResponsibleNodeName(node.getName());
+		job.setDate_created(String.valueOf(new Date().getTime()/1000L));
+	
+		session.save(job);
+		return job;
+	}
+	
+	
+	/**
+	 * Gets the contractor.
+	 *
+	 * @param contractorShortName the contractor short name
+	 * @return null if no contractor for short name could be found
+	 */
+	private User getContractor(Session session, String contractorShortName) {
+		logger.trace("CentralDatabaseDAO.getContractor(\"" + contractorShortName + "\")");
+	
+		@SuppressWarnings("rawtypes")
+		List list;	
+		list = session.createQuery("from User where short_name=?1")
+	
+				.setParameter("1",contractorShortName).setReadOnly(true).list();
+		
+		if (list.isEmpty())
+			return null;
+	
+		return (User) list.get(0);
+	}
+	
 	
 	
 	
@@ -196,7 +232,7 @@ public class IngestAreaScannerWorker {
 
 				Session session = HibernateUtil.openSession();
 				session.beginTransaction();
-				if (dao.getJob(session, convertMaskedSlashes(FilenameUtils.removeExtension(children[i])),
+				if (getJob(session, convertMaskedSlashes(FilenameUtils.removeExtension(children[i])),
 						contractorShortName) == null) {				
 					logger.debug("New file found, making timestamp for: "+children[i]);
 					files.put(children[i], currentTimeStamp);
@@ -218,6 +254,36 @@ public class IngestAreaScannerWorker {
 		
 		return childrenWhichAreReady;
 	} 
+	
+	
+	/**
+	 * Gets the job.
+	 *
+	 * @param orig_name the orig_name
+	 * @param csn the csn
+	 * @return the job
+	 */
+	@SuppressWarnings("unchecked")
+	private Job getJob(Session session, String orig_name, String csn) {
+		List<Job> l = null;
+	
+		try {
+			l = session.createQuery(
+					"SELECT j FROM Job j left join j.obj as o left join o.user as c where o.orig_name=?1 and c.short_name=?2"
+					)
+							.setParameter("1", orig_name)
+							.setParameter("2", csn)
+							.setReadOnly(true).list();
+			
+			return l.get(0);
+		} catch (IndexOutOfBoundsException e) {
+			logger.debug("search for a job with orig_name " + orig_name + " for user " +
+						 csn + " returns null!");
+			return null;
+		}
+	}
+	
+	
 
 	// TODO factor out
 	/**
@@ -306,13 +372,4 @@ public class IngestAreaScannerWorker {
 		this.registerObjectService = registerObjectService;
 	}
 
-	public CentralDatabaseDAO getDao() {
-		return dao;
-	}
-
-	public void setDao(CentralDatabaseDAO dao) {
-		this.dao = dao;
-	}
-	
-	
 }

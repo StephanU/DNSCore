@@ -31,15 +31,13 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import de.uzk.hki.da.core.RelativePath;
 import de.uzk.hki.da.grid.DistributedConversionAdapter;
-import de.uzk.hki.da.model.CentralDatabaseDAO;
-import de.uzk.hki.da.model.Contractor;
+import de.uzk.hki.da.model.User;
 import de.uzk.hki.da.model.Job;
 import de.uzk.hki.da.model.Node;
 import de.uzk.hki.da.model.Object;
 import de.uzk.hki.da.model.Package;
-import de.uzk.hki.da.utils.Path;
-import de.uzk.hki.da.utils.RelativePath;
 
 
 /**
@@ -67,9 +65,6 @@ public class TarActionTests {
 	static Job job = new Job("csn","vm3");
 	
 	
-	/** The dao. */
-	static CentralDatabaseDAO dao = mock (CentralDatabaseDAO.class);
-	
 	/** The action. */
 	static TarAction action = new TarAction();
 	
@@ -87,7 +82,7 @@ public class TarActionTests {
 		node.setWorkingResource("vm3");
 		node.setWorkAreaRootPath(new RelativePath(workAreaRootPath));
 		
-		Contractor contractor = new Contractor();
+		User contractor = new User();
 		contractor.setShort_name("csn");
 		Object o = new Object();
 		o.setContractor(contractor);
@@ -101,7 +96,6 @@ public class TarActionTests {
 		job.setObject(o);
 
 		action.setObject(o);
-		action.setDao(dao);
 		action.setDistributedConversionAdapter(mock(DistributedConversionAdapter.class));
 		action.setLocalNode(node);
 		action.setJob(job);

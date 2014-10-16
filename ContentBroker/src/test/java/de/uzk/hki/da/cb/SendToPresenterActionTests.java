@@ -35,13 +35,14 @@ import org.apache.commons.io.IOUtils;
 import org.junit.Before;
 import org.junit.Test;
 
+import de.uzk.hki.da.core.Path;
+import de.uzk.hki.da.core.RelativePath;
 import de.uzk.hki.da.metadata.DCReader;
 import de.uzk.hki.da.model.Object;
+import de.uzk.hki.da.model.PreservationSystem;
 import de.uzk.hki.da.repository.RepositoryException;
 import de.uzk.hki.da.repository.RepositoryFacade;
-import de.uzk.hki.da.utils.Path;
-import de.uzk.hki.da.utils.RelativePath;
-import de.uzk.hki.da.utils.TESTHelper;
+import de.uzk.hki.da.test.TESTHelper;
 
 /**
  * @author Daniel M. de Oliveira
@@ -88,6 +89,7 @@ public class SendToPresenterActionTests {
 		
 		Set<String> testContractors = new HashSet<String>();
 		action.setTestContractors(testContractors);
+		action.setPSystem(new PreservationSystem());
 	}
 	
 	@Test
@@ -104,7 +106,7 @@ public class SendToPresenterActionTests {
 	public void testThrowErrorWhenTryingToExecuteWithoutURNSet(){
 		object.setUrn(null);
 		try {
-			action.implementation();
+			action.checkSystemStatePreconditions();
 			fail();
 		} catch (Exception e) {
 			System.out.println(e.getMessage());

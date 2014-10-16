@@ -8,13 +8,18 @@
            http://www.springframework.org/schema/util/spring-util-3.0.xsd
            http://www.springframework.org/schema/task
            http://www.springframework.org/schema/task/spring-task-3.0.xsd">
-          
+    
+    <bean id="ProcessUserDecisionsAction" class="de.uzk.hki.da.cb.ProcessUserDecisionsAction"
+		scope="prototype">
+		<property name="startStatus" value="640" />
+		<property name="endStatus" value="640" />
+		<property name="name" value="ProcessUserDecisionsAction" />
+	</bean>      
 	<bean id="RestartIngestWorkflowAction" class="de.uzk.hki.da.cb.RestartIngestWorkflowAction"
 		scope="prototype">
 		<property name="startStatus" value="600" />
 		<property name="endStatus" value="120" />
 		<property name="name" value="RestartIngestWorkflowAction" />
-		<property name="jhoveScanService" ref="jhoveScanService" />	
 	</bean>
 	<bean id="DeleteObjectAction" class="de.uzk.hki.da.cb.DeleteObjectAction"
 		scope="prototype">
@@ -27,10 +32,7 @@
 		scope="prototype">
 		<property name="startStatus" value="5000" />
 		<property name="endStatus" value="6000" />
-		<property name="gridRoot" ref="${cb.implementation.grid}"/>
-		<property name="nodeAdminEmail" value="${localNode.admin_email}" />
-        <property name="minNodes" value="${system.min_repls}" />
-        <property name="systemFromEmailAddress" value="${system.emailFrom}" />
+		<property name="gridRoot" ref="${cb.implementation.grid:fakeGridFacade}"/>
 		<property name="name" value="AuditAction" /> 
 	</bean>
 </beans>

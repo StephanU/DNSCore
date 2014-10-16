@@ -38,6 +38,7 @@ as a package contain either the objects complete data, or only a part of it. The
 situtaion, it either can contain data derived only from one singly SIP or it can contain data from several SIPs. Therefore
 the different concepts of our object model will be explained in detail in the following sections.
 
+
 ### Object
 
 The Java [Object](../java/de/uzk/hki/da/model/Object.java) class.
@@ -49,7 +50,7 @@ Every object in DNSCore will get a unique technical identifier within the system
 identifier is the primary means of identifying and finding an object within the system. Therefore
 it gets "handed over" to the user at the end of the ingest workflow.
 
-![](https://raw2.github.com/da-nrw/DNSCore/master/ContentBroker/src/main/markdown/object_model_1.jpg)
+![](https://raw.githubusercontent.com/da-nrw/DNSCore/master/ContentBroker/src/main/markdown/object_model_objects_packages.jpg)
 
 Also each object is always in a certain object_state which indicates if the object is 
 
@@ -88,9 +89,11 @@ DIP generation. Since this was a source of confusion in the early days of the pr
 the different functions of original DIPs and DIPs for constant access (which we call presentation or publication) by
 introducing the PIP concept.
 
-### Contractor
+### User
 
-The Java [Contractor](../java/de/uzk/hki/da/model/Contractor.java) class.
+![](https://raw.githubusercontent.com/da-nrw/DNSCore/master/ContentBroker/src/main/markdown/object_model_object_users.jpg)
+
+The Java [User](../java/de/uzk/hki/da/model/User.java) class.
 
 The contractor is modeled to describe a party which delivers content to a system consisting of nodes running DNSCore.
 Every contractor has one specific node to which it can deliver its content. This node processes the data and stores the
@@ -107,99 +110,24 @@ TODO administrator, default, presenter
 
 TODO contractor_short_name
 
-### System
+### PreservationSystem
 
-The system as a whole, consisting of nodes (TODO).
+
+The Java [PreservationSystem](../java/de/uzk/hki/da/model/PreservationSystem.java) class.
+
+The PreservationSystem represents the system as a  whole. It consists of several [Nodes](object_model.md#Node), to which contractors deliver content. The PreservationSystem provides rules for application of conversions ([ConversionPolicy](object_model.md#ConversionPolicy))s which are in effect globally as well as information about the [ConversionRoutine](object_model.md#ConversionRoutine)s which all nodes have to provide in a uniform manner.
 
 ### Node
 
-The node is the abstract notion for a location at which a box running DNSCore sits.
-It is part of the a grid of sites which replicate data for each other and share common policies.
-The grid of nodes in this documentation is often referred to as the "system". Each node has a list of contractors
-for which it provides the DNSCore functionality and for whose objects storage and distribution it is mainly/solely responsible.
+The Java [Node](../java/de/uzk/hki/da/model/Node.java) class.
 
-
-
-
-### DAFile
-
-The java [DAFile](../java/de/uzk/hki/da/model/DAFile.java) class.
-
-![](https://raw.github.com/da-nrw/DNSCore/master/ContentBroker/src/main/markdown/object_model_1a.jpg)
-
-Each file stored within a package has a correspondent DAFile instance, which captures some properties
-relevant to the business logic of the application.
-
-#### PUID
-
-The puid is used to store the file format of the file, determined by 
-[FIDO](http://www.openplanetsfoundation.org/software/fido), 
-and encoded in the [PRONOM](http://www.nationalarchives.gov.uk/PRONOM/Default.aspx) format.
-
-#### Representation
-
-The representation under which the concrete DAfile can be found has been described in a following paragraph . However, as stated there,
-it is not modelled as an own class. Instead, the representation is modelled as part of the DAFile class. At the moment DAFile instances
-are used during processing packages by the workflows of the ContentBroker. Therefore, DAFile is targeted at files which reside in the 
-[WorkArea](https://github.com/da-nrw/DNSCore/blob/master/ContentBroker/src/main/markdown/processing_stages.md#workarea).
-
-#### Relative path
-
-The relative path of a file is always relative to the representation the file is contained in. A file
-
-    [WorkArea]/[csn]/[oid]/data/2014_10_01+12+12+a/subfolder/abc.tif
-    
-therefore has the relative path
-
-    subfolder/abc.tif
-
-
-
-### Representation
-
-A representation is a model entity of second order so to speak and
-is not modeled as a java class in its own right. Representations are a means of organizing
-the data within packages. When the ContentBroker ingests a SIP, it puts the original
-data into one representation and puts the data it generates itself into another representation.
-Therefore after repacking as AIP every package contains at least two representations. The
-naming scheme for a representation always looks like this:
-
-    yyyy_mm_dd+hh_mm+x
-    
-The x always is an a for original user content while x is b for system generated data. 
-
-By alphabetical ordering of representations it is possible to have a quick glance on the objects history.
-
-But while it seems obvious at first that every package has exactly two representations there are
-some occasions where you find more than two representations at the same time, either on the file system
-or in packages itself. If the system recognizes a package as a delta to an existing
-object during ingest. When this happens the system possibly needs to regenerate PIPs. Since in these cases
-data from older packages are needed the older packages get loaded from long term archival resources to
-the WorkArea. Then you will find old representations alongside new ones. This could look like that:
-
-    2014_10_01+12_12+a
-    2014_10_01+12_12+b
-    2015_10_03+10_00+a
-    2015_10_03+10_00+b
-    2016_09_03+01_10+a
-    2016_09_03+01_10+b
-
-After building PIPs everything except the newest two representations get deleted again from the WorkArea and
-the newest get repackaged an put on long term resources. But there also a use case which is yet to be implemented
-which will the system allow to repackage object contents distributed across several packages into a new single package
-which then contains more than one representation and the complete object content respectively. 
-
-Just because it was simple to do so, packages in WorkArea get two additional representations which never are part of
-AIPs and are used to store the PIPs for publication. These representations are
-
-    dip/public
-    dip/institution
+Contractors deliver content to nodes. The relationship between a contractor and "its" node (which is called primary node) is unique. Every Contractor delivers its objects always to the primary node. The node is a notion for a concrete technical system on the location of an operating company. Different nodes of different operating companies form a [PreservationSystem](object_model.md#PreservationSystem). The contractors content get mirrored between the nodes which form the PreservationSystem. The copies of the objects delivered to the primary node are formally called primary copies. 
 
 ### ConversionPolicy
 
 The Java [ConversionPolicy](../java/de/uzk/hki/da/model/ConversionPolicy.java) class.
 
-![](https://raw.github.com/da-nrw/DNSCore/master/ContentBroker/src/main/markdown/object_model_2.jpg)
+![](https://github.com/da-nrw/DNSCore/blob/master/ContentBroker/src/main/markdown/object_model_conversion_dafiles.jpg)
 
 A ConversionPolicy is a system wide property which describes which ConversionRoutine is to be executed by the system
 for every given file found in a SIP, either in the context of long term archival or in the context of publication.
@@ -229,4 +157,57 @@ has to decide that the configuration of the ConversionRoutine in the system wide
 command line tools deliver the desired outcome. **Not yet implemented**, but planned for future versions is, that if cli plugins
 are used, that DNSCore is able to enforce specific versions of a tool (requires an additional property "version"), which makes
 it possible to make it testable in component tests after the domain expert has prepared it conceptually and tested it manually.
+
+
+
+
+### DAFile
+
+The java [DAFile](../java/de/uzk/hki/da/model/DAFile.java) class.
+
+Note that the concrete model is implemented a little bit different from the conceptual model outlined in the following sketch. The representation is modeled as part of dafile and the document is only modelled implicitely by the rep_name in combination with relative_path.
+
+
+![](https://raw.github.com/da-nrw/DNSCore/master/ContentBroker/src/main/markdown/object_model_dafiles_documents.jpg)
+
+Each file stored within a package has a correspondent DAFile instance, which captures some properties
+relevant to the business logic of the application.
+
+The puid is used to store the file format of the file, determined by 
+[FIDO](http://www.openplanetsfoundation.org/software/fido), 
+and encoded in the [PRONOM](http://www.nationalarchives.gov.uk/PRONOM/Default.aspx) format.
+
+Examples for the usage of representations can be found in [AIP specification](https://github.com/da-nrw/DNSCore/blob/master/ContentBroker/src/main/markdown/aip_specification.md).
+
+### Representation
+
+Representations make it possible to model the objects history on a file system level. For every package belonging to an object there are initially two representations. The +a representation contains the users data in unmodified form. The +b representatioins contains converted or modified versions of selected files. A representation has the form "yyyy_mm_dd+hh_mm+x". By sorting the rep_names alphabetically one can get a quick glance on the objects history (see also section "document").
+
+An example for an object consisting of one initial import and two deltas could look like this (contents of the data folder):
+
+    2014_10_01+12_12+a
+    2014_10_01+12_12+b
+    2015_10_03+10_00+a
+    2015_10_03+10_00+b
+    2016_09_03+01_10+a
+    2016_09_03+01_10+b
+
+The relative path of a file is always relative to the representation the file is contained in. A file
+
+    [WorkArea]/[csn]/[oid]/data/2014_10_01+12_12+a/subfolder/abc.tif
+    
+therefore has the rep_name "2014_10_01+12_12+a" has the relative path "subfolder/abc.tif".
+
+It is important to understand that the representations are independent of the package. They belong directly to the object (TODO repackaging)
+
+#### Document
+
+A document is uniquely definied by its DAFile's relative path subtracting the extension. The two files
+
+    2014_10_01+12_12+a/subfolder/1.jpg
+    2014_10_01+12_12+b/subfolder/1.tif
+    
+both share the document name "subfolder/1". The system treats them as one logical document. The file "1.tif" is treated as the successor of "1.jpg", independently of its origin, which can be either by modification, conversion or a delta by a user. For this system to work properly it is important that only one DAFile with a certain document name exists inside a representation.
+    
+
 

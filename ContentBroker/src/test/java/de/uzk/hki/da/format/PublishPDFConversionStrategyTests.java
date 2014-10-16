@@ -32,6 +32,9 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import de.uzk.hki.da.core.C;
+import de.uzk.hki.da.core.Path;
+import de.uzk.hki.da.core.RelativePath;
 import de.uzk.hki.da.format.PublishPDFConversionStrategy;
 import de.uzk.hki.da.model.ConversionInstruction;
 import de.uzk.hki.da.model.ConversionRoutine;
@@ -41,11 +44,8 @@ import de.uzk.hki.da.model.Object;
 import de.uzk.hki.da.model.PublicationRight;
 import de.uzk.hki.da.model.TextRestriction;
 import de.uzk.hki.da.model.PublicationRight.Audience;
-import de.uzk.hki.da.utils.C;
-import de.uzk.hki.da.utils.Path;
-import de.uzk.hki.da.utils.RelativePath;
-import de.uzk.hki.da.utils.TESTHelper;
-import de.uzk.hki.da.utils.TC;
+import de.uzk.hki.da.test.TC;
+import de.uzk.hki.da.test.TESTHelper;
 
 
 /**
@@ -54,8 +54,8 @@ import de.uzk.hki.da.utils.TC;
 public class PublishPDFConversionStrategyTests {
 	
 	Path workAreaRootPath= Path.make(TC.TEST_ROOT_FORMAT,"PublishPDFConversionStrategyTests");
-	Path dataPath = Path.make(workAreaRootPath,"work/TEST/1",C.DATA);
-	Path dipPath = Path.make(dataPath,C.DIP);
+	Path dataPath = Path.make(workAreaRootPath,"work/TEST/1",C.WA_DATA);
+	Path dipPath = Path.make(dataPath,C.WA_DIP);
 	
 	/** The cs. */
 	PublishPDFConversionStrategy cs = new PublishPDFConversionStrategy();

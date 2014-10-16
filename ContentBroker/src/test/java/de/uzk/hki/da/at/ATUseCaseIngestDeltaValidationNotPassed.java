@@ -22,43 +22,35 @@ package de.uzk.hki.da.at;
 import java.io.IOException;
 
 import org.apache.commons.io.FileUtils;
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import de.uzk.hki.da.core.C;
+import de.uzk.hki.da.core.Path;
 import de.uzk.hki.da.model.Object;
-import de.uzk.hki.da.utils.C;
-import de.uzk.hki.da.utils.Path;
-import de.uzk.hki.da.utils.TC;
+import de.uzk.hki.da.test.TC;
 
 /**
  * @author Daniel M. de Oliveira
  */
-public class ATUseCaseIngestDeltaValidationNotPassed extends UserErrorBase {
+public class ATUseCaseIngestDeltaValidationNotPassed extends AcceptanceTest {
 	                                            
 	private static final String ORIG_NAME =    "ATUseCaseIngestDeltaDuplicateEAD";
 	private static final String IDENTIFIER =   "ATUseCaseIngestDeltaDuplicateEADIdentifier";
-	private static final String CONTAINER_NAME = ORIG_NAME+"."+C.TGZ;
+	private static final String CONTAINER_NAME = ORIG_NAME+"."+C.FILE_EXTENSION_TGZ;
 
 	Object object = null;
 	
 	@Before
 	public void setUp() throws IOException{
-		setUpBase();
 
-		object = putPackageToStorage(IDENTIFIER,ORIG_NAME,CONTAINER_NAME);
+		object = ath.putPackageToStorage(IDENTIFIER,ORIG_NAME,CONTAINER_NAME,null,100);
 		FileUtils.copyFile(Path.makeFile(TC.TEST_ROOT_AT,CONTAINER_NAME), 
 				Path.makeFile(localNode.getIngestAreaRootPath(),C.TEST_USER_SHORT_NAME,CONTAINER_NAME));
 	}
 	
-	@After
-	public void tearDown(){
-		clearDB();
-		cleanStorage();
-	}
-	
 	@Test
 	public void testRejectDuplicateEADFiles() throws IOException, InterruptedException{
-//		ingestAndWaitForErrorState(ORIG_NAME, C.USER_ERROR_STATE_DIGIT); // TODO cannot test this right now
+		ath.ingestAndWaitForErrorState(ORIG_NAME, C.WORKFLOW_STATE_DIGIT_USER_ERROR);
 	}
 }

@@ -20,19 +20,27 @@
 package de.uzk.hki.da.cb;
 
 import java.io.File;
-import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.hibernate.Session;
+
+import de.uzk.hki.da.action.AbstractAction;
+import de.uzk.hki.da.core.C;
 import de.uzk.hki.da.core.ConfigurationException;
-import de.uzk.hki.da.format.FormatScanService;
+import de.uzk.hki.da.core.HibernateUtil;
+import de.uzk.hki.da.ff.FileFormatException;
+import de.uzk.hki.da.ff.FileFormatFacade;
+import de.uzk.hki.da.ff.IFileWithFileFormat;
+import de.uzk.hki.da.ff.ISubformatIdentificationPolicy;
 import de.uzk.hki.da.grid.DistributedConversionAdapter;
 import de.uzk.hki.da.model.ConversionInstruction;
 import de.uzk.hki.da.model.ConversionInstructionBuilder;
 import de.uzk.hki.da.model.ConversionPolicy;
 import de.uzk.hki.da.model.DAFile;
 import de.uzk.hki.da.model.Package;
-import de.uzk.hki.da.model.PreservationSystem;
+import de.uzk.hki.da.model.SecondStageScanPolicy;
 
 
 /**
@@ -41,32 +49,52 @@ import de.uzk.hki.da.model.PreservationSystem;
  */
 public class ScanForPresentationAction extends AbstractAction{
 	
-	private FormatScanService formatScanService;
-	private PreservationSystem preservationSystem;
+	private FileFormatFacade fileFormatFacade;
 	private final ConversionInstructionBuilder ciB = new ConversionInstructionBuilder();
-	private String sidecarExtensions;
 	private DistributedConversionAdapter distributedConversionAdapter;
 	
 	public ScanForPresentationAction(){}
 	
 	@Override
-	boolean implementation() throws FileNotFoundException {
+	public void checkActionSpecificConfiguration() throws ConfigurationException {
 		if (distributedConversionAdapter==null) throw new ConfigurationException("distributedConversionAdapter not set");
-		if (formatScanService==null) throw new ConfigurationException("formatScanService not set");
-		if (preservationSystem==null) // So we can prevent the preservationSystem to be instantiated in unit tests.
-			preservationSystem = new PreservationSystem(dao);
-		
+		if (fileFormatFacade==null) throw new ConfigurationException("formatScanService not set");
+	}
+
+	@Override
+	public void checkSystemStatePreconditions() throws IllegalStateException {
+		// Auto-generated method stub
+	}
+
+	@Override
+	public boolean implementation() throws IOException {
 		// check if object package type is set
 		
+		Session session = HibernateUtil.openSession();
+		List<SecondStageScanPolicy> policies = 
+				preservationSystem.getSubformatIdentificationPolicies();
+		session.close();
+		List<ISubformatIdentificationPolicy> polys = new ArrayList<ISubformatIdentificationPolicy>();
+		for (SecondStageScanPolicy s:policies)
+			polys.add((ISubformatIdentificationPolicy) s);
+		fileFormatFacade.setSubformatIdentificationPolicies(polys);
+
+
+//		if (newestFiles.size() == 0)
+//			throw new RuntimeException("No files found!");
+		List<? extends IFileWithFileFormat> fffl=null;
+		try {
+			fffl = fileFormatFacade.identify(object.getNewestFilesFromAllRepresentations(preservationSystem.getSidecarExtensions()));
+		} catch (FileFormatException e) {
+			throw new RuntimeException(C.ERROR_MSG_DURING_FILE_FORMAT_IDENTIFICATION,e);
+		}
 		
-		List<DAFile> newestFiles = object.getNewestFilesFromAllRepresentations(sidecarExtensions);
-		if (newestFiles.size() == 0)
-			throw new RuntimeException("No files found!");
-		newestFiles = formatScanService.identify(newestFiles);
-		
+		@SuppressWarnings("unchecked")
 		List<ConversionInstruction> cisPres = generateConversionInstructionsForPresentation(
 			object.getLatestPackage(),
-			newestFiles);
+			(List<DAFile>) fffl);
+		
+		
 		if (cisPres.size() == 0) logger.trace("no Conversion instructions for Presentation found!");				
 		for (ConversionInstruction ci:cisPres) logger.info("Built conversionInstructionForPresentation: "+ci.toString());
 		
@@ -76,13 +104,14 @@ public class ScanForPresentationAction extends AbstractAction{
 	}
 	
 	
-	
-	/**
-	 * this is just for testing purposes
-	 * @param sys
-	 */
-	void setPreservationSystem(PreservationSystem sys){
-		preservationSystem = sys;
+
+	@Override
+	public void rollback() {
+		
+		job.getConversion_instructions().clear();
+		for (ConversionInstruction ci: job.getConversion_instructions()){
+			logger.warn("still exists: "+ci);
+		}
 	}
 
 	/**
@@ -96,7 +125,6 @@ public class ScanForPresentationAction extends AbstractAction{
 	 */
 	public List<ConversionInstruction> generateConversionInstructionsForPresentation( 
 			Package pkg, List<DAFile> files ){
-		if (preservationSystem==null) throw new IllegalStateException("preservationSystem not set");
 		
 		List<ConversionInstruction> cis = new ArrayList<ConversionInstruction>();
 		
@@ -105,7 +133,7 @@ public class ScanForPresentationAction extends AbstractAction{
 			// get cps for fileanduser. do with cps: assemble
 			
 			logger.trace("Generating ConversionInstructions for PRESENTER");
-			List<ConversionPolicy> policies = preservationSystem.getApplicablePolicies(file, "PRESENTER");
+			List<ConversionPolicy> policies = preservationSystem.getApplicablePolicies(file, true);
 			if ( object.grantsRight("PUBLICATION")
 					&& !file.toRegularFile().getName().toLowerCase().endsWith(".xml")
 					&& !file.toRegularFile().getName().toLowerCase().endsWith(".rdf")
@@ -145,31 +173,14 @@ public class ScanForPresentationAction extends AbstractAction{
 		return is;
 	}
 		
-	public FormatScanService getFormatScanService() {
-		return formatScanService;
+	public FileFormatFacade getFormatScanService() {
+		return fileFormatFacade;
 	}
 
-	public void setFormatScanService(FormatScanService formatScanService) {
-		this.formatScanService = formatScanService;
+	public void setFormatScanService(FileFormatFacade fileFormatFacade) {
+		this.fileFormatFacade = fileFormatFacade;
 	}
 	
-	public void setSidecarExtensions(String sidecarExtensions) {
-		this.sidecarExtensions = sidecarExtensions;
-	}
-
-	public String getSidecarExtensions() {
-		return sidecarExtensions;
-	}
-
-	@Override
-	void rollback() {
-		
-		job.getConversion_instructions().clear();
-		for (ConversionInstruction ci: job.getConversion_instructions()){
-			logger.warn("still exists: "+ci);
-		}
-	}
-
 	public DistributedConversionAdapter getDistributedConversionAdapter() {
 		return distributedConversionAdapter;
 	}

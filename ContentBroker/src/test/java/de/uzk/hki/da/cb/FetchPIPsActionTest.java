@@ -1,62 +1,62 @@
+/*
+  DA-NRW Software Suite | ContentBroker
+  Copyright (C) 2014 LVRInfoKom
+  Landschaftsverband Rheinland
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 package de.uzk.hki.da.cb;
 
-import java.io.File;
-import java.io.FileInputStream;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Properties;
 
-import javax.validation.constraints.AssertTrue;
-
+import org.apache.commons.io.FileUtils;
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.springframework.context.support.AbstractApplicationContext;
-import org.springframework.context.support.FileSystemXmlApplicationContext;
-import org.apache.commons.io.FileUtils;
 
-import com.mchange.v2.log.PackageNames;
-
+import de.uzk.hki.da.core.Path;
+import de.uzk.hki.da.core.RelativePath;
 import de.uzk.hki.da.grid.DistributedConversionAdapter;
 import de.uzk.hki.da.grid.FakeDistributedConversionAdapter;
-import de.uzk.hki.da.grid.GridFacade;
-import de.uzk.hki.da.model.Contractor;
+import de.uzk.hki.da.model.User;
 import de.uzk.hki.da.model.Node;
 import de.uzk.hki.da.model.Object;
 import de.uzk.hki.da.model.Package;
-import de.uzk.hki.da.utils.Path;
-import de.uzk.hki.da.utils.RelativePath;
-import static org.junit.Assert.assertFalse;
-import static org.mockito.Mockito.mock;
-import static org.junit.Assert.*;
 
 /**
- * 
  * @author Polina Gubaidullina
- *
  */
-
 public class FetchPIPsActionTest{
 	
-	/** The action. */
 	static FetchPIPsAction action = new FetchPIPsAction();
 
-	/** The irods. */
 	private static DistributedConversionAdapter distributedConversionAdapter;
 	
-	/** The node. */
 	private static Node localNode = new Node();
 	
-	/** The object. */
 	private static Object object = new Object();
 	
-	/** The package. */
 	private static Package testPackage = new Package();
 	
-	/** The packages. */
 	private static List<Package> packages = new ArrayList<Package>(); 
 	
 	String sourceDIPName;
@@ -66,29 +66,21 @@ public class FetchPIPsActionTest{
 	private static Path sourcePIPsPath = Path.make(testDir, "sourceDir"); 
 	private static Path institutionPartialPath = Path.make("pips", "institution", "TEST");
 	private static Path publicPartialPath = Path.make("pips", "public", "TEST");
-	private static Path workAreaRootPartialPath = Path.make(testDir, "localNodeWorkAreaRootPath");
+	private static Path workAreaRootPartialPath = Path.make(testDir, "work");
 	private static String packageName = "1";
 	private static String objectId = "1";
 	
-	@BeforeClass
+	@AfterClass
 	public static void cleanUp() {
-		FileUtils.deleteQuietly(Path.make(workAreaRootPartialPath, institutionPartialPath, objectId).toFile());
-		FileUtils.deleteQuietly(Path.make(workAreaRootPartialPath, publicPartialPath, objectId).toFile());
-	}
-	
-	@BeforeClass
-	public static void mockDca() {
-		distributedConversionAdapter = mock(FakeDistributedConversionAdapter.class);
-	}
-	
-	@BeforeClass
-	public static void initLocalNode() {
-		localNode.setWorkAreaRootPath(workAreaRootPartialPath);
+		FileUtils.deleteQuietly(Path.make(workAreaRootPartialPath, institutionPartialPath).toFile());
+		FileUtils.deleteQuietly(Path.make(workAreaRootPartialPath, publicPartialPath).toFile());
 	}
 	
 	@BeforeClass
 	public static void initObject() {
-		Contractor contractor = new Contractor();
+		distributedConversionAdapter = mock(FakeDistributedConversionAdapter.class);
+		localNode.setWorkAreaRootPath(workAreaRootPartialPath);
+		User contractor = new User();
 		contractor.setShort_name("TEST");
 		object.setContractor(contractor);
 		object.setIdentifier(objectId);
@@ -96,24 +88,6 @@ public class FetchPIPsActionTest{
 		testPackage.setName(packageName);
 		packages.add(testPackage);
 		object.setPackages(packages);
-	}
-	
-	@Before
-	public void initImpementation() throws FileNotFoundException, IOException {
-		actionSetup();
-		manReplFromSourceToWorkingResource();
-		action.implementation();
-	}
-	
-	@Before
-	public void actionSetup() {
-		action.setLocalNode(localNode);
-		action.setObject(object);
-		action.setDistributedConversionAdapter(distributedConversionAdapter);
-	}
-	
-	@BeforeClass
-	public static void manReplFromSourceToWorkingResource() {
 		try {
 			FileUtils.copyDirectory(Path.make(sourcePIPsPath, institutionPartialPath).toFile(), Path.make(workAreaRootPartialPath, institutionPartialPath).toFile());
 			FileUtils.copyDirectory(Path.make(sourcePIPsPath, publicPartialPath).toFile(), Path.make(workAreaRootPartialPath, publicPartialPath).toFile());
@@ -122,8 +96,18 @@ public class FetchPIPsActionTest{
 		}
 	}
 	
+	@Before
+	public void initImpementation() throws FileNotFoundException, IOException {
+		action.setLocalNode(localNode);
+		action.setObject(object);
+		action.setDistributedConversionAdapter(distributedConversionAdapter);
+		action.implementation();
+	}
+	
+	
 	@Test
 	public void testRenamePIPs(){
-		assertTrue(Path.make(workAreaRootPartialPath, institutionPartialPath, objectId).toFile().exists());
+		assertTrue(Path.makeFile(workAreaRootPartialPath, publicPartialPath, objectId).exists());
+		assertTrue(Path.makeFile(workAreaRootPartialPath, institutionPartialPath, objectId).exists());
 	}
 }

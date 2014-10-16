@@ -5,7 +5,7 @@
 INSTALLER=target/installation
 CBTAR_SRC=target/installation_tar
 
-VERSION="v`cat ../VERSION.txt` (build: `git rev-parse HEAD` created on `date`)"
+VERSION="v`cat ../VERSION.txt` (build: `echo $BUILD_NUMBER` rev: `git rev-parse HEAD` created on `date`)"
 
 
 if [ $# -lt 1 ]
@@ -16,14 +16,16 @@ fi
 echo "calling package.sh $1 $2"
 
 
+
+
 function createStorageFolder(){
 	mkdir $CBTAR_SRC/storage/
-	mkdir $CBTAR_SRC/storage/grid
+	mkdir $CBTAR_SRC/storage/GridCacheArea
 	mkdir -p $CBTAR_SRC/storage/pips/institution/TEST
 	mkdir -p $CBTAR_SRC/storage/pips/public/TEST
-	mkdir -p $CBTAR_SRC/storage/user/TEST/outgoing
-	mkdir -p $CBTAR_SRC/storage/work/TEST
-	mkdir -p $CBTAR_SRC/storage/ingest/TEST
+	mkdir -p $CBTAR_SRC/storage/UserArea/TEST/outgoing
+	mkdir -p $CBTAR_SRC/storage/WorkArea/TEST
+	mkdir -p $CBTAR_SRC/storage/IngestArea/TEST
 }
 
 mkdir $INSTALLER
@@ -51,8 +53,12 @@ cp src/main/xml/beans.xml.node $INSTALLER
 cp src/main/xml/beans.xml.pres $INSTALLER
 cp src/main/xml/beans.xml.full $INSTALLER
 cp src/main/xml/beans.xml.full.dev $INSTALLER
-cp src/main/xml/logback.xml.debug $INSTALLER/logback.xml
+cp src/main/xml/logback.xml $INSTALLER/logback.xml.template
+cp src/main/bash/ContentBroker_stop.sh $INSTALLER/ContentBroker_stop.sh.template
+cp src/main/bash/ContentBroker_start.sh $INSTALLER/ContentBroker_start.sh.template
 
+
+	
 cp src/main/xml/hibernateCentralDB.cfg.xml.$1 $INSTALLER/hibernateCentralDB.cfg.xml
 case "$1" in
 dev)
@@ -67,15 +73,17 @@ ci)
 esac
 
 
-cd ../DAWeb
-./build.sh prod
-if [ "$?" = "1" ]
+if [ "${!#}" != "skip" ]
 then
-	echo there was an error in ./build.sh prod
-	exit 1
-fi 
-cd ../ContentBroker
-
+	cd ../DAWeb
+	./build.sh prod
+	if [ "$?" = "1" ]
+	then
+		echo there was an error in ./build.sh prod
+		exit 1
+	fi 
+	cd ../ContentBroker
+fi
 
 cd $CBTAR_SRC
 rm ../installation/ContentBroker.tar 2>/dev/null

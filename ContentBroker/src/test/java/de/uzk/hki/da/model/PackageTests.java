@@ -20,14 +20,13 @@ package de.uzk.hki.da.model;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
-import de.uzk.hki.da.model.Object;
-import de.uzk.hki.da.utils.Path;
-import de.uzk.hki.da.utils.RelativePath;
 
 import java.util.List;
 
 import org.junit.Before;
 import org.junit.Test;
+
+import de.uzk.hki.da.core.RelativePath;
 
 
 /**
@@ -71,7 +70,7 @@ public class PackageTests {
 		
 		String repName = "test";
 		Object object = new Object();
-		Contractor contractor = new Contractor();
+		User contractor = new User();
 		contractor.setShort_name("TEST");
 		Package pkg = new Package();
 		pkg.setId(1);

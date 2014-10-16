@@ -29,11 +29,11 @@ import org.apache.commons.io.FilenameUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import de.uzk.hki.da.core.Path;
 import de.uzk.hki.da.model.ConversionInstruction;
 import de.uzk.hki.da.model.DAFile;
 import de.uzk.hki.da.model.Event;
 import de.uzk.hki.da.model.Object;
-import de.uzk.hki.da.utils.Path;
 import de.uzk.hki.da.utils.SimplifiedCommandLineConnector;
 import de.uzk.hki.da.utils.Utilities;
 
@@ -68,11 +68,12 @@ public class PdfConversionStrategy implements ConversionStrategy {
 	 * @throws FileNotFoundException the file not found exception
 	 * @Author : jens Peters
 	 */
+	@Override
 	public List<Event> convertFile(ConversionInstruction ci)
 			throws FileNotFoundException {
 		if (object.getLatestPackage() == null)
 			throw new IllegalStateException("Package not set");
-		Path.make(object.getDataPath(),object.getNameOfNewestRep(),
+		Path.make(object.getPath("newest"),
 				ci.getTarget_folder()).toFile().mkdirs();
 		List<Event> results = new ArrayList<Event>();
 		File result = new File(generateTargetFilePath(ci));
@@ -87,7 +88,7 @@ public class PdfConversionStrategy implements ConversionStrategy {
 		}
 
 		if (result.exists()) {
-			DAFile daf = new DAFile(object.getLatestPackage(), object.getNameOfNewestRep(),
+			DAFile daf = new DAFile(object.getLatestPackage(), object.getPath("newest").getLastElement(),
 					Utilities.slashize(ci.getTarget_folder())
 							+ result.getName());
 			logger.debug("new dafile:" + daf);
@@ -118,7 +119,7 @@ public class PdfConversionStrategy implements ConversionStrategy {
 	 */
 	public String generateTargetFilePath(ConversionInstruction ci) {
 		String input  = ci.getSource_file().toRegularFile().getAbsolutePath();
-		return object.getDataPath()+"/"+object.getNameOfNewestRep()+"/"+Utilities.slashize(ci.getTarget_folder())
+		return object.getPath("newest")+"/"+Utilities.slashize(ci.getTarget_folder())
 				+ FilenameUtils.getBaseName(input)+"."+ci.getConversion_routine().getTarget_suffix();
 	}
 	

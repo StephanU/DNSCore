@@ -29,8 +29,11 @@ import java.io.File
 
 class OutgoingController {
 
+	def springSecurityService
+	
     def index() {
-		def relativeDir = session.contractor.shortName + "/outgoing"
+		def user = springSecurityService.currentUser
+		def relativeDir = user.getShortName() + "/outgoing"
 		def baseFolder = grailsApplication.config.localNode.userAreaRootPath + "/" + relativeDir
 		def baseDir
 		def filelist = []
@@ -55,18 +58,18 @@ class OutgoingController {
 		
 	}
 	
-	def webdav() {
+	def download() {
 		// set Queue Entry to read. 
 		log.debug("Setting read status of file " + params.filename)
 		def idn = params.filename.substring(0,params.filename.length()-4)
 		log.debug("Setting read status of object <" + idn + ">")
-		
-		def que = QueueEntry.findAll("from QueueEntry as q where q.obj.contractor.shortName=:csn and q.obj.identifier=:idn",
-             [csn: session.contractor.shortName,
+		User user = springSecurityService.currentUser
+		def que = QueueEntry.findAll("from QueueEntry as q where q.obj.user.shortName=:csn and q.obj.identifier=:idn",
+             [csn: user.getShortName(),
 				idn: idn])
 		que.each {
 			
-			it.setStatus("960")
+			//it.setStatus("960")
 			
 			def dateCode = Math.round(new Date().getTime()/1000L)
 			log.debug("dateCode:"+dateCode)
@@ -76,7 +79,7 @@ class OutgoingController {
 			it.save();
 		}
 		
-		def webdavurl = grailsApplication.config.transferNode.downloadLinkPrefix +"/"+  session.irodsAccount.userName  + "/outgoing"
+		def webdavurl = grailsApplication.config.transferNode.downloadLinkPrefix +"/"+   user.getShortName()  + "/outgoing"
 		redirect(url:webdavurl + "/" + params.filename)
 	}
 

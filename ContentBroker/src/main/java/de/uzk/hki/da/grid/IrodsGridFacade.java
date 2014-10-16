@@ -24,15 +24,13 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 
-import javax.naming.ConfigurationException;
-
 import org.apache.commons.io.FilenameUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.util.StringUtils;
 
+import de.uzk.hki.da.core.C;
 import de.uzk.hki.da.model.StoragePolicy;
-import de.uzk.hki.da.utils.C;
 import de.uzk.hki.da.utils.MD5Checksum;
 
 /**
@@ -62,8 +60,8 @@ public class IrodsGridFacade extends IrodsGridFacadeBase {
 		String address_dest = gridPath;
 		if (!gridPath.startsWith("/")) 
 			address_dest = "/" + gridPath;
-		String targetPhysically = localNode.getGridCacheAreaRootPath() + "/" + C.AIP + address_dest;
-		String targetLogically  = "/" + irodsSystemConnector.getZone() + "/" + C.AIP  + address_dest;	
+		String targetPhysically = localNode.getGridCacheAreaRootPath() + "/" + C.WA_AIP + address_dest;
+		String targetLogically  = "/" + irodsSystemConnector.getZone() + "/" + C.WA_AIP  + address_dest;	
 		File gridfile = new File (targetPhysically); 
 		
 		if (registerOnWorkingResourceAndComputeChecksum(file,targetLogically,gridfile))
@@ -92,7 +90,7 @@ public class IrodsGridFacade extends IrodsGridFacadeBase {
 			logger.debug("compute checksum on " + targetLogically);
 			String MD5CheckSum = MD5Checksum.getMD5checksumForLocalFile(file);
 			if (irodsSystemConnector.computeChecksum(targetLogically).equals(MD5CheckSum)){
-				irodsSystemConnector.addAVUMetadataDataObject(targetLogically, "chksum", MD5CheckSum );
+				irodsSystemConnector.saveOrUpdateAVUMetadataDataObject(targetLogically, "chksum", MD5CheckSum );
 				return true;
 			}
 		}
@@ -133,7 +131,7 @@ public class IrodsGridFacade extends IrodsGridFacadeBase {
 	public boolean storagePolicyAchieved(String gridPath2, StoragePolicy sp) {
 		irodsSystemConnector.connect();
 		
-		String gridPath = "/" + irodsSystemConnector.getZone() + "/" + C.AIP + "/" + gridPath2;
+		String gridPath = "/" + irodsSystemConnector.getZone() + "/" + C.WA_AIP + "/" + gridPath2;
 		
 		int minNodes = sp.getMinNodes();
 		if (minNodes == 0 ) {

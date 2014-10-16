@@ -19,12 +19,10 @@
 package de.uzk.hki.da.cb;
 
 import static org.fest.assertions.Assertions.assertThat;
-import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyObject;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -36,15 +34,17 @@ import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 import org.springframework.util.StringUtils;
 
-import de.uzk.hki.da.format.FormatScanService;
-import de.uzk.hki.da.format.JhoveScanService;
-import de.uzk.hki.da.model.Contractor;
+import de.uzk.hki.da.core.HibernateUtil;
+import de.uzk.hki.da.core.RelativePath;
+import de.uzk.hki.da.ff.IFileWithFileFormat;
+import de.uzk.hki.da.ff.StandardFileFormatFacade;
 import de.uzk.hki.da.model.DAFile;
 import de.uzk.hki.da.model.Job;
 import de.uzk.hki.da.model.Node;
 import de.uzk.hki.da.model.Object;
 import de.uzk.hki.da.model.Package;
-import de.uzk.hki.da.utils.RelativePath;
+import de.uzk.hki.da.model.PreservationSystem;
+import de.uzk.hki.da.model.User;
 
 
 /**
@@ -72,19 +72,19 @@ public class CheckFormatsActionTest {
 	 * Sets the upformat scan service behaviour.
 	 *
 	 * @return the format scan service
-	 * @throws FileNotFoundException the file not found exception
 	 * @author Daniel M. de Oliveira
+	 * @throws IOException 
 	 */
 	@SuppressWarnings("unchecked")
-	private FormatScanService setUpformatScanServiceBehaviour()
-			throws FileNotFoundException {
-		FormatScanService formatScanService = mock(FormatScanService.class);
+	private StandardFileFormatFacade setUpformatScanServiceBehaviour()
+			throws IOException {
+		StandardFileFormatFacade formatScanService = mock(StandardFileFormatFacade.class);
 		
-		when(formatScanService.identify((List<DAFile>)anyObject())).thenAnswer(new Answer< List<DAFile> >(){
+		when(formatScanService.identify((List<IFileWithFileFormat>)anyObject())).thenAnswer(new Answer< List<DAFile> >(){
 			@Override
 			public List<DAFile> answer(InvocationOnMock invocation)
 					throws Throwable {
-				java.lang.Object[] args = (java.lang.Object[]) invocation.getArguments();
+				java.lang.Object[] args = invocation.getArguments();
 				List<DAFile> list = (List<DAFile>) args[0];
 				
 				for (DAFile f:list){
@@ -126,14 +126,14 @@ public class CheckFormatsActionTest {
 	 */
 	@Before
 	public void setUp() throws Exception{
+		HibernateUtil.init("src/main/xml/hibernateCentralDB.cfg.xml.inmem");
+		
+		PreservationSystem pSystem = new PreservationSystem();
 		localNode = new Node();
-		Contractor contractor = new Contractor();
+		User contractor = new User();
 		contractor.setShort_name("TEST");
 		localNode.setWorkAreaRootPath(new RelativePath(workAreaRootPath));
 
-		JhoveScanService jhove = mock(JhoveScanService.class);
-		when(jhove.extract((File)anyObject(),anyInt())).thenReturn("abc");
-		
 		final Package sipPackage = new Package(); sipPackage.setName("2"); // the SIP / Delta
 		final Package aipPackage = new Package(); aipPackage.setName("1"); // the existing AIP
 		
@@ -158,7 +158,7 @@ public class CheckFormatsActionTest {
 		object.setTransientNodeRef(localNode);
 		object.reattach();
 		
-		FormatScanService formatScanService = setUpformatScanServiceBehaviour();
+		StandardFileFormatFacade fileFormatFacade = setUpformatScanServiceBehaviour();
 		
 		job = new Job();
 		job.setId(1000);
@@ -166,12 +166,11 @@ public class CheckFormatsActionTest {
 		job.setObject(object);
 		
 		action.setObject(object);
-		action.setFormatScanService(formatScanService);
+		action.setFileFormatFacade(fileFormatFacade);
 		action.setJob(job);
 		action.setLocalNode(localNode);
-		action.setSidecarExtensions("");
-		action.setJhoveScanService(jhove);
-		
+		action.setFileFormatFacade(fileFormatFacade);
+		action.setPSystem(pSystem);
 	}
 
 	

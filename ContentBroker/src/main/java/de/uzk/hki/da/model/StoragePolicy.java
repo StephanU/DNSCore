@@ -1,6 +1,5 @@
 package de.uzk.hki.da.model;
 
-import java.util.ArrayList;
 import java.util.List;
 
 
@@ -14,6 +13,8 @@ public class StoragePolicy {
 	private Node node = null;
 	
 	private int min_nodes;
+	
+	private String forbiddenNodes;
 	
 	public StoragePolicy(Node localnode) {
 		this.node = localnode;
@@ -45,12 +46,21 @@ public class StoragePolicy {
 		this.destinations = destinations;
 	}
 
-
 	/**
 	 * @return the destinations
 	 */
 	public List<String> getDestinations() {
 		return destinations;
+	}
+
+
+	public String getForbiddenNodes() {
+		return forbiddenNodes;
+	}
+
+
+	public void setForbiddenNodes(String forbiddenNodes) {
+		this.forbiddenNodes = forbiddenNodes;
 	}
 
 	

@@ -21,28 +21,23 @@ package de.uzk.hki.da.format;
 
 import static org.junit.Assert.assertTrue;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 import org.apache.commons.io.FileUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import de.uzk.hki.da.format.ConverterService;
+import de.uzk.hki.da.core.Path;
+import de.uzk.hki.da.core.RelativePath;
 import de.uzk.hki.da.model.ConversionInstruction;
 import de.uzk.hki.da.model.ConversionRoutine;
 import de.uzk.hki.da.model.DAFile;
-import de.uzk.hki.da.model.Node;
 import de.uzk.hki.da.model.Object;
-import de.uzk.hki.da.utils.Path;
-import de.uzk.hki.da.utils.RelativePath;
-import de.uzk.hki.da.utils.TESTHelper;
-import de.uzk.hki.da.utils.TC;
+import de.uzk.hki.da.test.TC;
+import de.uzk.hki.da.test.TESTHelper;
 
 
 /**
@@ -67,21 +62,19 @@ public class ConverterServiceTests {
 	 */
 	@Before
 	public void setUp(){
-		final Node vm3 = new Node("vm3","01-vm3");
 		
 		o = TESTHelper.setUpObject("123",new RelativePath(workAreaRootPath));
+		DAFile f1 = new DAFile(o.getLatestPackage(),"2011+11+01+b","abc.xml");
+		o.getLatestPackage().getFiles().add(f1);
 		
-		@SuppressWarnings("serial")
-		Set<Node> nodes = new HashSet<Node>(){{add(vm3);}};
+		
 		ConversionRoutine im = new ConversionRoutine(
 				"IM",
-				nodes,
 				"de.uzk.hki.da.format.CLIConversionStrategy",
 				"convert input output",
 				"png");
 		ConversionRoutine copy = new ConversionRoutine(
 				"IM",
-				nodes,
 				"de.uzk.hki.da.format.CLIConversionStrategy",
 				"cp input output",
 				"*");

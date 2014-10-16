@@ -15,6 +15,8 @@
 	<import resource="classpath*:META-INF/beans-infrastructure.identifier.xml"/>
 	<import resource="classpath*:META-INF/beans-infrastructure.fedora.xml"/>
 	<import resource="classpath*:META-INF/beans-infrastructure.irods.xml"/>
+	<import resource="classpath*:META-INF/beans-infrastructure.irodsgridfacade.xml"/>
+	<import resource="classpath*:META-INF/beans-infrastructure.irodsdistributedconversionadapter.xml"/>
 
 	<import resource="classpath*:META-INF/beans-workflow.presentation.xml"/>
 	<import resource="classpath*:META-INF/beans-workflow.ingest.xml"/>
@@ -38,6 +40,7 @@
 	<task:scheduler id="taskScheduler" pool-size="20" />
 
 	<util:map id="actionThreads">
+		<entry key="ProcessUserDecisionsAction" value="3" />
 		<entry key="DeleteObjectAction" value="3" />
 		<entry key="RestartIngestWorkflowAction" value="3" />
 		<entry key="IngestRegisterURNAction" value="3" />
@@ -75,6 +78,7 @@
 		<entry key="PIPGenCleanWorkAreaAction" value="3" />
 	</util:map>
 	<util:list id="actionOrdering">
+   		<value>ProcessUserDecisionsAction</value>
    		<value>DeleteObjectAction</value>
 		<value>RestartIngestWorkflowAction</value>
 		<value>RetrievalAction</value>

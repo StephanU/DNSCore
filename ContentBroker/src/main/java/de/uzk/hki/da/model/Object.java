@@ -2,6 +2,8 @@
   DA-NRW Software Suite | ContentBroker
   Copyright (C) 2013 Historisch-Kulturwissenschaftliche Informationsverarbeitung
   Universität zu Köln
+  Copyright (C) 2014 LVRInfoKom
+  Landschaftsverband Rheinland
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -20,8 +22,11 @@
 package de.uzk.hki.da.model;
 
 import java.io.File;
+import java.io.FileFilter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -42,17 +47,18 @@ import javax.persistence.OneToMany;
 import javax.persistence.Table;
 import javax.persistence.Transient;
 
+import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.FilenameUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.commons.io.filefilter.RegexFileFilter;
+import org.apache.commons.io.filefilter.TrueFileFilter;
 
+import de.uzk.hki.da.core.Path;
 import de.uzk.hki.da.model.PublicationRight.Audience;
-import de.uzk.hki.da.utils.Path;
 import de.uzk.hki.da.utils.Utilities;
 
 
 /**
- * The Class Object.
+ * The Class DNS Object.
  *
  * @author Jens Peters
  * @author Daniel M. de Oliveira
@@ -61,8 +67,24 @@ import de.uzk.hki.da.utils.Utilities;
 @Table(name="objects")
 public class Object {
 	
-	/** The Constant logger. */
-	private static final Logger logger = LoggerFactory.getLogger(Object.class);
+	public static class ObjectStatus {
+		public static final Integer UnderAudit = 60;
+		public static final Integer InWorkflow = 50;
+		public static final Integer Error = 51;
+		public static final Integer ArchivedAndValid = 100;
+	}
+
+	/** The object_state. */ 
+	private int object_state;
+
+	
+	
+	
+	private static final String REPRESENTATION_FILTER = "^.*[+][ab]";
+	
+	
+	
+	
 	
 	/** The data_pk. */
 	@Id
@@ -72,6 +94,7 @@ public class Object {
 	/** 
 	 * The identifier. In javadoc comments throughout the source code base often refered to as oid.
 	 * */
+	@Column(unique=true)
 	private String identifier;
 	
 	/** The urn. */
@@ -92,6 +115,11 @@ public class Object {
 	private String package_type;
 	
 	private String metadata_file;
+
+	@Transient
+	private String DIP_PUBLIC_REPNAME = "dip/public";
+	@Transient
+	private String DIP_INSTITUTION_REPNAME = "dip/institution";
 	
 	/** The zone. */
 	private String zone;
@@ -99,14 +127,6 @@ public class Object {
 	/** The published_flag. */
 	private int published_flag;
 	
-	/** The object_state. 
-	 *
-	 * 100: archived and valid
-	 * 51: corrupt
-	 * 50: in workflow
-	 * 60: under integrity check
-	 */
-	private int object_state;
 	
 	/** The last_checked. */
 	private Date last_checked;
@@ -150,8 +170,8 @@ public class Object {
 	
 	/** The contractor. */
 	@ManyToOne
-	@JoinColumn(name = "contractor_id")
-	private Contractor contractor;
+	@JoinColumn(name = "user_id")
+	private User user;
 	 
 	/** The packages. */
 	@OneToMany(targetEntity=Package.class, fetch=FetchType.EAGER, cascade=CascadeType.ALL)
@@ -323,8 +343,26 @@ public class Object {
 		if (transientNodeRef.getWorkAreaRootPath()==null||transientNodeRef.getWorkAreaRootPath().toString().isEmpty()) 
 			throw new IllegalStateException("WorkAreaRootPath of related object is null or empty. Physical path cannot be calculated");
 		
-		return Path.make(transientNodeRef.getWorkAreaRootPath(),"work",contractor.getShort_name(),identifier);
+		return Path.make(transientNodeRef.getWorkAreaRootPath(),"work",user.getShort_name(),identifier);
 	}
+
+	/**
+	 * 
+	 * @param t
+	 * @return the path to the newest b representation.
+	 * @throws IllegalStateException if no dafiles present in object.
+	 */
+	public Path getPath(String t){
+		if (getReps().isEmpty()) throw new IllegalStateException("no files present. reps could not get determined from dafiles.");
+		
+		String newestRep = getReps().get(getReps().size()-1);
+		
+		return Path.make(getPath(),"data", newestRep.replace("+a", "+b"));
+	}
+	
+	
+	
+	
 	
 	
 	
@@ -339,7 +377,7 @@ public class Object {
 		return 
 				"Object["
 		+ identifier + "," + urn + "," + "," + orig_name + "," +
-		contractor.getShort_name() +
+		user.getShort_name() +
 						"]";
 	}
 	
@@ -389,8 +427,8 @@ public class Object {
 	 *
 	 * @param contractor the new contractor
 	 */
-	public void setContractor(Contractor contractor) {
-		this.contractor = contractor;
+	public void setContractor(User contractor) {
+		this.user = contractor;
 	}
 	
 	
@@ -399,8 +437,8 @@ public class Object {
 	 *
 	 * @return the contractor
 	 */
-	public Contractor getContractor() {
-		return contractor;
+	public User getContractor() {
+		return user;
 	}
 	
 	/**
@@ -569,7 +607,7 @@ public class Object {
 				&& !rights.getPublicationRights().isEmpty()) {
 			return true;
 		} else if (eventType.equals("MIGRATION") && rights.getMigrationRight() != null) {
-			return true;
+			if (!rights.getMigrationRight().getCondition().equals(MigrationRight.Condition.CONFIRM)) return true;
 		}
 		return false;
 	}
@@ -609,209 +647,75 @@ public class Object {
 	
 	
 	
+	/**
+	 * @author Daniel M. de Oliveira 
+	 * @return
+	 */
+	private Collection<DAFile> getFilesFromRepresentation(String rep){
+
+		ArrayList<DAFile> list = new ArrayList<DAFile>();
+		
+		for (Package pkg:getPackages()){
+			for (DAFile f:pkg.getFiles()){
+				if (f.getRep_name().equals(rep)) list.add(f);
+			}
+		}
+		
+		return list;
+	}
+ 	
 	
 	/**
 	 * Gets the newest files from all representations.
 	 *
 	 * @param sidecarExtensions Files with the given extensions are considered sidecar files. Sidecar files are treated differently from other files
 	 *  (see <a href="https://github.com/da-nrw/DNSCore/blob/master/ContentBroker/src/main/markdown/dip_specification.md#sidecar-files">documentation</a> for details)
-	 * @return newest DAFile of each Document. Note that by default the DAFile instances are build from scratch and will
-	 * not be attached to the object. However in case there are already instances attached to the object which correspond
-	 * to the file objects from the file system, the method will return these instead.
+	 * @return newest DAFile of each Document.  
 	 * @author Thomas Kleinke
 	 * @author Daniel M. de Oliveira
 	 * @throws RuntimeException if it finds a file on the file system to which it cannot find a corresponding attached instance of
 	 * DAFile in this object.
 	 */
 	
-	public List<DAFile> getNewestFilesFromAllRepresentations(String sidecarExtensions)
+	// TODO make it a set
+	public List<DAFile> getNewestFilesFromAllRepresentations(String sidecarExts)
 	{
-		Map<String, DAFile> fileMap = new HashMap<String, DAFile>();
-			
-		File mainFolder = getDataPath().toFile();
-		if ((!mainFolder.exists())||((mainFolder.listFiles().length == 0)))
-			throw new RuntimeException("Folder " + mainFolder.getAbsolutePath() +
-									   " is empty or does not exist!");	
+		// document name to newest file instance
+		Map<String, DAFile> documentMap = new HashMap<String, DAFile>();
 		
-		checkFiles(
-				FilenameUtils.getFullPath(
-						mainFolder.getPath().
-						substring(0, mainFolder.getPath().length()-2)
-						), 
-				mainFolder, 
-				fileMap, 
-				sidecarExtensions );
-	
-		return new ArrayList<DAFile>(fileMap.values());
+		for (String rep : getReps())
+			for (DAFile f: getFilesFromRepresentation(rep)){
+				if (Utilities.hasSidecarExtension(f.getRelative_path(),sidecarExts))
+					documentMap.put(f.getRelative_path(), f);
+				else
+					documentMap.put(FilenameUtils.removeExtension(f.getRelative_path()), f);
+			}
+			
+		return new ArrayList<DAFile>(documentMap.values());
 	}
 	
 	
-	
-	
 	/**
-	 * Check files.
-	 *
-	 * @param rootPath the root path
-	 * @param folder the folder
-	 * @param fileMap the file map
-	 * @param sidecarExtensions the sidecar extensions
-	 * @return sidecarExtensions
-	 * @author Thomas Kleinke
+	 * Gets the representations based on the existing folders in the objects folder on the file system.
 	 * @author Daniel M. de Oliveira
+	 * @return representations as sorted array
 	 */
-	// TODO rename method to specify what is checked here
-	private Map<String, DAFile> checkFiles( 
-			String rootPath, 
-			File folder, 
-			Map<String, DAFile> fileMap,
-			String sidecarExtensions)
-	{
-		
-		String dataPath = rootPath + "data/";
-		
-		File[] files = folder.listFiles();
-		Arrays.sort(files); // sort rep names chronologically (i.e. alphabetically)
-		
-		for (File f : files)
-		{
-			if (f.isDirectory())
-				fileMap = checkFiles(rootPath, f, fileMap, sidecarExtensions);
-			else
-			{				
-				String fRelativePath = f.getPath();
-				fRelativePath = fRelativePath.replace(dataPath, "");
-				
-				int indexOfFirstSeparator = fRelativePath.indexOf('/');
-				if (indexOfFirstSeparator == -1) continue;
-				if (fRelativePath.startsWith("dip")) {
-					indexOfFirstSeparator += fRelativePath.substring(indexOfFirstSeparator+1).indexOf('/') + 1;
+	private List<String> getReps() {
+		List<String> representations = new ArrayList<String>();
+		for (Package p:this.getPackages()) {
+			for (DAFile f:p.getFiles()) {
+				String repName = f.getRep_name();
+				if(!repName.equals(DIP_PUBLIC_REPNAME) && !repName.equals(DIP_INSTITUTION_REPNAME)) {
+					representations.add(f.getRep_name());
 				}
-				String fRepName = fRelativePath.substring(0, indexOfFirstSeparator);
-				fRelativePath = fRelativePath.substring(indexOfFirstSeparator + 1); // relative from rep folder
-
-				String relativePathWithoutExtension = fRelativePath;
-				if (fRelativePath.lastIndexOf('.') != -1)
-				{
-					relativePathWithoutExtension = fRelativePath.substring(0, fRelativePath.lastIndexOf('.'));
-				}
-				
-				if (Utilities.isSidecarFile(fRelativePath, sidecarExtensions))
-					relativePathWithoutExtension += "?sidecar" + FilenameUtils.getExtension(fRelativePath).toLowerCase();
-				
-				DAFile newDAFile = new DAFile(this.getLatestPackage(),fRepName,fRelativePath);
-				
-				newDAFile = replaceByAttachedInstance(dataPath,
-						fRelativePath, fRepName, newDAFile);
-				
-				newDAFile.setRelative_path(fRelativePath);
-				fileMap.put(relativePathWithoutExtension, newDAFile);
 			}
 		}
-		
-		return fileMap;
+		Collections.sort(representations);
+		return representations;
 	}
 	
-	/**
-	 * Replace by attached instance if available.
-	 *
-	 * @param dataPath the data path
-	 * @param fRelativePath the f relative path
-	 * @param fRepName the f rep name
-	 * @param newDAFile the new da file
-	 * @return the dA file
-	 * @author Daniel M. de Oliveira
-	 */
-	private DAFile replaceByAttachedInstance(String dataPath,
-			String fRelativePath, String fRepName, DAFile newDAFile) {
-		
-		boolean foundAttachedInstance = false;
-		for (Package pkg : this.getPackages()) {    // if package already exists, replace by attached package
-			
-			for (DAFile attachedFile : pkg.getFiles()) {
 
-				if (attachedFile.toRegularFile().getAbsolutePath().equals
-						(new File(dataPath+fRepName+"/"+fRelativePath).getAbsolutePath())){
-					logger.trace(attachedFile.toString()+". Will use instance already attached to object.");
-					newDAFile = attachedFile;
-					foundAttachedInstance = true;
-					break;
-				}
-			}
-			if (foundAttachedInstance)
-				break;
-		}
-		if (!foundAttachedInstance)
-			throw new RuntimeException("cannot find attached instance for "+fRepName+"/"+fRelativePath);
-		return newDAFile;
-	}
 	
-	
-	
-	
-	
-	/**
-	 * Note that since this is not a path we don't close with ending slash as usual.
-	 *
-	 * @return the name of newest rep
-	 * @author daniel
-	 */
-	public String getNameOfNewestRep(){
-		String[] files = getDataPath().toFile().list();
-		Arrays.sort(files);
-		
-		List<String> list = new ArrayList<String>();
-		for (String f:files){
-			if (!f.startsWith("dip") && !f.startsWith("premis"))
-				list.add(f); 
-		}
-		return list.get(list.size()-1);
-	}
-	
-	
-	/**
-	 * Note that since this is not a path we don't close with ending slash as usual.
-	 *
-	 * @return the name of newest a rep
-	 * @author Daniel M. de Oliveira
-	 * @author Thomas Kleinke
-	 */
-	public String getNameOfNewestARep(){
-		
-		String[] files = getDataPath().toFile().list();
-		Arrays.sort(files);
-		
-		List<String> list = new ArrayList<String>();
-		for (String f:files){
-			if (!f.startsWith("dip") && !f.startsWith("premis") && f.endsWith("a"))
-				list.add(f); 
-		}
-		
-		return list.get(list.size()-1);
-	}
-	
-	
-	/**
-	 * Note that since this is not a path we don't close with ending slash as usual.
-	 *
-	 * @return the name of newest b rep or null if no b rep exists
-	 * @author Daniel M. de Oliveira
-	 * @author Thomas Kleinke
-	 */
-	public String getNameOfNewestBRep(){
-		String[] files = getDataPath().toFile().list();
-		Arrays.sort(files);
-		
-		List<String> list = new ArrayList<String>();
-		for (String f:files){
-			if (!f.startsWith("dip") && !f.startsWith("premis") && f.endsWith("b"))
-				list.add(f); 
-		}
-		
-		if (list.size() == 0)
-			return null;
-		else
-			return list.get(list.size()-1);
-	}
 	
 	
 	/**
@@ -825,23 +729,14 @@ public class Object {
 	 */
 	public DAFile getLatest(String filename) {
 		
-		File[] representations = getDataPath().toFile().listFiles();
-		Arrays.sort(representations);
-		
 		DAFile result = null;
-		for (File rep : representations) {
-			if (new File(getDataPath()+"/"+rep.getName()+"/"+filename).exists()){
+		for (String rep : getReps()) {
 
-				for (Package p:this.getPackages())
-					for (DAFile f:p.getFiles()){
-						if (f.equals(new DAFile(this.getLatestPackage(),rep.getName(),filename))) result=f;
-					}
-				if (result==null) throw new IllegalStateException("found a file without an associated dafile instance "+
-						new DAFile(this.getLatestPackage(),rep.getName(),filename));
-			}
+			Collection<DAFile> filesFromRep = getFilesOfRepresentation(rep);
+			for (DAFile f:filesFromRep)
+				if (f.getRelative_path().endsWith(filename)) result = f;
 		}
 		
-		logger.debug("getLatest(). result is {}", result);
 		return result;
 	}
 	
@@ -930,4 +825,130 @@ public class Object {
 	public void setMetadata_file(String metadata_file) {
 		this.metadata_file = metadata_file;
 	}
+
+	
+	
+	/**
+	 * Checks if for every DAFile attached to the db there is a physical file inside the object folder on the file system.
+	 * @author Daniel M. de Oliveira
+	 * @return false if there is at least one DAFile which lacks a correspondent physical file. true otherwise.
+	 */
+	public boolean isDBtoFSconsistent() {
+
+		boolean consistent = true;
+		
+		for (Package pkg: getPackages())
+			for (DAFile f: pkg.getFiles()){
+				if (!f.getRep_name().matches(REPRESENTATION_FILTER)) continue;
+				if (!f.toRegularFile().exists()) consistent = false;
+			}
+		
+		return consistent;
+	}
+
+
+	/**
+	 * Checks if for every physical file inside the object on the file system there is a DAFile attached to one of the packages belonging to the object.
+	 * @author Daniel M. de Oliveira
+	 * @return false if there is at least one existent file the DAfile is missing. true otherwise.
+	 */
+	public boolean isFStoDBconsistent() {
+		
+		boolean consistent = true;
+		
+		for (File rep : getRepsFromFS()) {
+			
+			for (File fileSystemFile:getFilesOfRepresentationFS(rep.getName())){
+				
+				if (!existsAsAttachedDAFile(
+						new DAFile(null,rep.getName(),getRelativePath(fileSystemFile, rep.getName()))))
+					consistent = false;
+			}
+		}
+		return consistent;
+	}
+
+	
+	private List<File> getRepsFromFS() {
+
+		FileFilter fileFilter = new RegexFileFilter(REPRESENTATION_FILTER);
+		
+		File[] representations = getDataPath().toFile().listFiles(fileFilter);
+		if (representations==null)
+			return new ArrayList<File>();
+		
+		Arrays.sort(representations);
+		return Arrays.asList(representations);
+	}
+	
+	
+	
+	
+	/**
+	 * @author Daniel M. de Oliveira
+	 * @return
+	 */
+	private boolean existsAsAttachedDAFile(DAFile toCompare){
+		
+		for (Package p: getPackages()){
+			for (DAFile f:p.getFiles()){
+				if (f.equals(toCompare)) return true;
+			}
+		}
+		return false;
+	}
+	
+	
+	/**
+	 * @author Daniel M. de Oliveira
+	 * @param f
+	 * @param repName
+	 * @return
+	 */
+	private String getRelativePath(File f,String repName){
+		
+		return f.getPath().replace(getPath().toString()+"/data/"+repName,"");
+	}
+	
+	
+	/**
+	 * Gets the files of a representation based on the information stored
+	 * in the object tree. 
+	 * 
+	 * @author Daniel M. de Oliveira
+	 * @param repName
+	 * @return
+	 */
+	private Collection<DAFile> getFilesOfRepresentation(String repName){
+		
+		Collection<DAFile> files = new ArrayList<DAFile>();
+		
+		for (Package pkg:this.getPackages()){
+			for (DAFile f:pkg.getFiles()){
+				if (f.getRep_name().equals(repName))
+					files.add(f);
+			}
+		}
+		
+		return files;
+	}
+	
+	
+	
+	
+	/**
+	 * Gets the files of a representation. Operates on the basis of the FS.
+	 * 
+	 * @author Daniel M. de Oliveira
+	 * @param repName
+	 * @return
+	 */
+	private Collection<File> getFilesOfRepresentationFS(String repName){
+		
+		return FileUtils.listFiles(Path.makeFile(this.getDataPath(),repName),
+				TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE);
+	}
+	
+	
+	
 }

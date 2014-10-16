@@ -2,7 +2,7 @@ package daweb3
 /*
  DA-NRW Software Suite | ContentBroker
  Copyright (C) 2013 Historisch-Kulturwissenschaftliche Informationsverarbeitung
- Universität zu Köln, 2014 LVR InfoKom
+ Universität zu Köln, 2014 LVRInfoKom
 
  This program is free software: you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
@@ -34,18 +34,18 @@ class ObjectController {
     static allowedMethods = [save: "POST", update: "POST", delete: "POST"]
 	static QueueUtils qu = new QueueUtils();
 	
+	def springSecurityService
 	
     def index() {
         redirect(action: "list", params: params)
     }
 
     def list() {
-		
-				def admin = false;
+				User user = springSecurityService.currentUser
 				
-				def contractorList = Contractor.list()
-		
-				def relativeDir = session.contractor.shortName+ "/outgoing"
+				def contractorList = User.list()
+				def admin = 0;
+				def relativeDir = user.getShortName() + "/outgoing"
 				def baseFolder = grailsApplication.config.localNode.userAreaRootPath + "/" + relativeDir				
 					params.max = Math.min(params.max ? params.int('max') : 10, 100)
 
@@ -59,24 +59,25 @@ class ObjectController {
 					log.debug(params.toString())
 					def objects = c.list(max: params.max, offset: params.offset ?: 0) {
 						
-						if (session==null) throw new RuntimeException("sss")
 						if (params.search) params.search.each { key, value ->
 								like(key, "%" + value + "%")
 						}
 						
 						
-						if (session.contractor.admin==0) {
 						
-							def contractor = Contractor.findByShortName(session.contractor.shortName)
-							eq("contractor.id", contractor.id)
+						if (user.authorities.any { it.authority == "ROLE_NODEADMIN" }) {
+							admin = 1;
+						}
+						if (admin==0) {
+						
+							eq("user.id", user.id)
 							
 						}
-						if (session.contractor.admin==1) {
+						if (admin==1) {
 							if (params.searchContractorName!=null) {
-								createAlias( "contractor", "c" )
+								createAlias( "user", "c" )
 								eq("c.shortName", params.searchContractorName)
 							}
-							admin = true;
 						}
 						between("object_state", 50,100)
 						order(params.sort ?: "id", params.order ?: "desc")
@@ -89,28 +90,38 @@ class ObjectController {
 						paramsList.putAt("searchContractorName", params?.searchContractorName)
 					}
 
-					return [
-						objectInstanceList: objects,
+					if (user.authorities.any { it.authority == "ROLE_NODEADMIN" }) {
+						render(view:"adminList", model:[	objectInstanceList: objects,
 						objectInstanceTotal: objects.getTotalCount(),
 						searchParams: params.search,
 						paramsList: paramsList,
 						paginate: true,
 						admin: admin,
 						baseFolder: baseFolder,
-						contractorList: contractorList
-				]
+						contractorList: contractorList]);
+					} else render(view:"list", model:[	objectInstanceList: objects,
+						objectInstanceTotal: objects.getTotalCount(),
+						searchParams: params.search,
+						paramsList: paramsList,
+						paginate: true,
+						admin: admin,
+						baseFolder: baseFolder,
+						contractorList: contractorList]);
     }
 
     def show() {
+		def username = springSecurityService.currentUser
+		
 		def c = Object.createCriteria()
-		log.debug(params.toString())
 		def objectInstance;
 		def contractor;
-		
-		
-		if (session.contractor.admin==0) {
-			contractor = Contractor.findByShortName(session.contractor.shortName)
-			objectInstance = Object.findByIdAndContractor (params.id, contractor);
+		User user = User.findByUsername(username)
+		def admin = 0
+		if (user.authorities.any { it.authority == "ROLE_NODEADMIN" }) {
+			admin = 1;
+		}
+		if (admin==0) {
+			objectInstance = Object.findByIdAndUser (params.id, user);
 		}  else objectInstance = Object.get(params.id);
 	    if (!objectInstance) {
 			flash.message = message(code: 'default.not.found.message', args: [message(code: 'object.label', default: 'Object'), params.id])
@@ -131,7 +142,11 @@ class ObjectController {
      */
 		def queueAllForRetrieval = {
 			def result = [success:true]
-
+			User user = springSecurityService.currentUser
+			def admin = 0
+			if (user.authorities.any { it.authority == "ROLE_NODEADMIN" }) {
+				admin = 1;
+			}
 			result.msg = "Retrieving objects:\n"
 
 			List<String> urnList = new ArrayList<String>();
@@ -148,12 +163,14 @@ class ObjectController {
 					result.msg += "${object.urn} - NICHT GEFUNDEN. "
 					result.success = false
 				} else {
-				if (object.contractor.shortName != session.contractor.shortName) {
+				if (object.user.shortName != user.getShortName()) {
 					result.msg += "${object.urn} - KEINE BERECHTIGUNG. "
 					result.success = false
 				} else {
 					try {
-					qu.createJob( object ,"900", grailsApplication.config.irods.server) + "\n"	
+					CbNode cbn = CbNode.get(grailsApplication.config.localNode.id)
+					
+					qu.createJob( object ,"900", cbn.getName()) + "\n"	
 					result.msg += "${object.urn} - OK. " 
 					} catch ( Exception e ) { 
 					result.msg += "${object.urn} - FEHLER. "
@@ -173,24 +190,26 @@ class ObjectController {
 
     def queueForRetrieval = {
 			def result = [success:false]
-			
+			User user = springSecurityService.currentUser
 			def object = Object.get(params.id)
-					
+		
 			if ( object == null ) {
 				 result.msg = "Das Objekt ${object.urn} konnte nicht gefunden werden!"
 			}
 			else {
-				if (object.contractor.shortName != session.contractor.shortName) {
+				if (object.user.shortName != user.getShortName()) {
 					result.msg = "Sie haben nicht die nötigen Berechtigungen, um das Objekt ${object.urn} anzufordern!"
 					
 				} else {
 					try {
-					qu.createJob( object ,"900", grailsApplication.config.irods.server) 
+					
+					CbNode cbn = CbNode.get(grailsApplication.config.localNode.id)						
+					qu.createJob( object ,"900", cbn.getName()) 
 					result.msg = "Objekt ${object.urn} erfolgreich angefordert."
 					result.success = true
 					} catch ( Exception e ) { 
 					result.msg = "Objekt ${object.urn} konnte nicht angefordert werden."
-					println e
+					log.error("Error saving Retrieval request : " + e.printStackTrace())
 					}
 				}
 			}
@@ -254,11 +273,11 @@ class ObjectController {
 			
 			if (object != null) {
 			
-				log.debug "object.contractor.shortName: " + object.contractor.shortName
-				log.debug "session.contractor.shortName: " + session.contractor.shortName
+				log.debug "object.contractor.shortName: " + object.user.shortName
 					
 				try {
-						qu.createJob( object, "5000" , grailsApplication.config.irods.server)
+						CbNode cbn = CbNode.get(grailsApplication.config.localNode.id)
+						qu.createJob( object, "5000" , cbn.getName())
 						result.msg = "Das Objekt mit der URN ${object.urn} wurde zur Überprüfung in die Queue eingestellt!"
 						result.success = true
 					} catch(Exception e) {

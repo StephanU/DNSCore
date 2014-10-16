@@ -22,10 +22,10 @@ package de.uzk.hki.da.repository;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
-import java.util.Map;
 
 import org.apache.commons.io.FileUtils;
 import org.slf4j.Logger;
@@ -38,6 +38,8 @@ import org.slf4j.LoggerFactory;
  */
 public class FakeRepositoryFacade implements RepositoryFacade {
 	
+	private MetadataIndex metadataIndex;
+	
 	static final Logger logger = LoggerFactory.getLogger(FakeRepositoryFacade.class);
 	
 	private String workAreaRootPath;
@@ -45,7 +47,6 @@ public class FakeRepositoryFacade implements RepositoryFacade {
 	@Override
 	public boolean purgeObjectIfExists(String objectId, String collection)
 			throws RepositoryException {
-		logger.debug("purgeObjectIfExists");
 		try {
 			if (objectExists(objectId, collection)) {
 				FileUtils.deleteDirectory(getFile(objectId, collection, null));
@@ -61,7 +62,6 @@ public class FakeRepositoryFacade implements RepositoryFacade {
 	@Override
 	public void createObject(String objectId, String collection,
 			String ownerId) throws RepositoryException {
-		logger.debug("createObject");
 		if(!getFile(objectId, collection, null).mkdirs()) {
 			throw new RepositoryException("Unable to create folder for object "
 					+ collection + "/" + objectId);
@@ -74,7 +74,6 @@ public class FakeRepositoryFacade implements RepositoryFacade {
 	public void ingestFile(String objectId, String collection,
 			String fileId, File file, String label, String mimeType)
 			throws RepositoryException, IOException {
-		logger.debug("ingestFile");
 		try {
 			File destFile = getFile(objectId, collection, fileId);
 			FileUtils.copyFile(file, destFile);
@@ -88,7 +87,6 @@ public class FakeRepositoryFacade implements RepositoryFacade {
 	public void createMetadataFile(String objectId, String collection,
 			String fileId, String content, String label, String mimeType)
 			throws RepositoryException {
-		logger.debug("createMetadataFile");
 		PrintWriter pw = null;
 		try {
 			pw = new PrintWriter(getFile(objectId, collection, fileId), "UTF-8");
@@ -156,9 +154,58 @@ public class FakeRepositoryFacade implements RepositoryFacade {
 	}
 
 	@Override
-	public void indexMetadata(String indexName, String type, String id,
-			Map<String, Object> data) throws RepositoryException {
-		// stub, fake repository does not handle indexing
+	public void indexMetadata(String indexName, String id,
+			String edmContent) throws RepositoryException {
+		
+		FileOutputStream fop = null;
+		File file;
+ 
+		try {
+ 
+			file = new File("/tmp/edmContent");
+			fop = new FileOutputStream(file);
+ 
+			// if file doesnt exists, then create it
+			if (!file.exists()) {
+				file.createNewFile();
+			}
+ 
+			// get the content in bytes
+			byte[] contentInBytes = edmContent.getBytes();
+			fop.write(contentInBytes);
+			fop.flush();
+			fop.close();
+ 
+		} catch (IOException e) {
+			e.printStackTrace();
+		} finally {
+			try {
+				if (fop != null) {
+					fop.close();
+				}
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+	}
+	
+	public void setMetadataIndex(MetadataIndex metadataIndex) {
+		this.metadataIndex = metadataIndex;
+	}
+	
+	public MetadataIndex getMetadataIndex() {
+		return metadataIndex;
 	}
 
+	@Override
+	public String getIndexedMetadata(String indexName, String objectId) {
+		if (objectId.equals("Inventarnummer")) // lido
+			return "\"edm:provider\":\"DA-NRW - Digitales Archiv Nordrhein-Westfalen\"";
+		else if(objectId.endsWith("d1e15821")) // ead
+			return "VDA - Forschungsstelle Rheinlländer in aller Welt";
+		else if(objectId.endsWith("-1"))       // xmp
+			return "Dieser Brauch zum Sankt Martinstag";
+		else                                   // mets
+			return "ULB (Stadt) [Electronic ed.]";
+	}
 }

@@ -37,22 +37,23 @@ import org.jdom.JDOMException;
 import org.jdom.input.SAXBuilder;
 import org.jdom.output.XMLOutputter;
 
+import de.uzk.hki.da.action.AbstractAction;
+import de.uzk.hki.da.core.C;
 import de.uzk.hki.da.core.ConfigurationException;
+import de.uzk.hki.da.core.Path;
 import de.uzk.hki.da.metadata.DCReader;
+import de.uzk.hki.da.metadata.XMLUtils;
 import de.uzk.hki.da.metadata.XepicurWriter;
 import de.uzk.hki.da.model.DAFile;
 import de.uzk.hki.da.model.Event;
 import de.uzk.hki.da.repository.RepositoryException;
 import de.uzk.hki.da.repository.RepositoryFacade;
-import de.uzk.hki.da.utils.C;
-import de.uzk.hki.da.utils.Path;
-import de.uzk.hki.da.utils.XMLUtils;
 
 /** 
  * This action implements the ingest into the presentation repository.
  * 
  * It creates the epicur metadata for URN/URL mapping and creates
- * one object and the in the collections "danrw" and "danrw-closed"
+ * one object and the in the collections open and closed collections
  * depending on the audiences it should be accessible to according
  * to the contract and sets the published flag in the database
  * accordingly.
@@ -78,7 +79,6 @@ public class SendToPresenterAction extends AbstractAction {
 	private static final String PURL_ORG_DC = "http://purl.org/dc/elements/1.1/";
 	private static final String ENCODING = "UTF-8";
 	private static final String OPENARCHIVES_OAI_IDENTIFIER = "http://www.openarchives.org/OAI/2.0/identifier";
-	private static final String OAI_DANRW_DE = "oai:danrw.de:";
 	private static final String MEMBER = "info:fedora/fedora-system:def/relations-external#isMemberOf";
 	private static final String MEMBER_COLLECTION = "info:fedora/fedora-system:def/relations-external#isMemberOfCollection";
 	private static final String dip = "dip";
@@ -94,10 +94,28 @@ public class SendToPresenterAction extends AbstractAction {
 	
 	private DCReader dcReader;
 	
-	private String openCollectionName;
-	private String closedCollectionName;
-	
-	
+	@Override
+	public void checkActionSpecificConfiguration() throws ConfigurationException {
+		if (repositoryFacade == null) 
+			throw new ConfigurationException("Repository facade object not set. Make sure the action is configured properly");
+		
+	}
+
+
+	@Override
+	public void checkSystemStatePreconditions() throws IllegalStateException {
+		if (viewerUrls == null)
+			throw new IllegalStateException("viewerUrls is not set.");
+		if (fileFilter == null)
+			throw new IllegalStateException("fileFilter is not set");
+		if (testContractors == null)
+			throw new IllegalStateException("testContractors is not set");
+		
+		if (object.getUrn()==null||object.getUrn().isEmpty())
+			throw new RuntimeException("urn not set");
+	}
+
+
 	/**
 	 * Preconditions:
 	 * There can be two pips at
@@ -109,19 +127,6 @@ public class SendToPresenterAction extends AbstractAction {
 	 */
 	@Override
 	public boolean implementation() throws IOException {
-		if (repositoryFacade == null) 
-			throw new ConfigurationException("Repository facade object not set. Make sure the action is configured properly");
-		if (viewerUrls == null)
-			throw new ConfigurationException("viewerUrls is not set.");
-		if (fileFilter == null)
-			throw new ConfigurationException("fileFilter is not set");
-		if (testContractors == null)
-			throw new ConfigurationException("testContractors is not set");
-		
-		if (object.getUrn()==null||object.getUrn().isEmpty())
-			throw new RuntimeException("urn not set");
-		
-		
 
 		purgeObjectsIfExist();
 		buildMapWithOriginalFilenamesForLabeling();
@@ -141,9 +146,9 @@ public class SendToPresenterAction extends AbstractAction {
 		boolean publicPIPSuccesfullyIngested = false;
 		boolean institutionPIPSuccessfullyIngested = false;
 		if (pipPathPublic.toFile().exists())
-			publicPIPSuccesfullyIngested = createXEpicurAndIngest(pipPathPublic,getOpenCollectionName(),packageType,object.getUrn(),true);
+			publicPIPSuccesfullyIngested = createXEpicurAndIngest(pipPathPublic,preservationSystem.getOpenCollectionName(),packageType,object.getUrn(),true);
 		if (pipPathInstitution.toFile().exists()) 
-			institutionPIPSuccessfullyIngested = createXEpicurAndIngest(pipPathInstitution, getClosedCollectionName(), packageType, object.getUrn(), false);
+			institutionPIPSuccessfullyIngested = createXEpicurAndIngest(pipPathInstitution, preservationSystem.getClosedCollectionName(), packageType, object.getUrn(), false);
 		
 		setPublishedFlag(publicPIPSuccesfullyIngested,
 				institutionPIPSuccessfullyIngested);
@@ -157,7 +162,7 @@ public class SendToPresenterAction extends AbstractAction {
 	private void buildMapWithOriginalFilenamesForLabeling() {
 		labelMap = new HashMap<String,String>();
 		for (Event e:object.getLatestPackage().getEvents()) {			
-			if (!"CONVERT".equals(e.getType())) continue;
+			if (!C.EVENT_TYPE_CONVERT.equals(e.getType())) continue;
 			DAFile targetFile = e.getTarget_file();
 			if (!targetFile.getRep_name().startsWith(dip)) continue;			
 			DAFile sourceFile = e.getSource_file();
@@ -172,8 +177,8 @@ public class SendToPresenterAction extends AbstractAction {
 	 */
 	private void purgeObjectsIfExist(){
 		try {
-			getRepositoryFacade().purgeObjectIfExists(object.getIdentifier(), getOpenCollectionName());
-			getRepositoryFacade().purgeObjectIfExists(object.getIdentifier(), getClosedCollectionName());
+			getRepositoryFacade().purgeObjectIfExists(object.getIdentifier(), preservationSystem.getOpenCollectionName());
+			getRepositoryFacade().purgeObjectIfExists(object.getIdentifier(), preservationSystem.getClosedCollectionName());
 		} catch (RepositoryException e) {
 			throw new RuntimeException(e);
 		}
@@ -196,7 +201,7 @@ public class SendToPresenterAction extends AbstractAction {
 		XepicurWriter.createXepicur(
 				object.getIdentifier(), packageType, 
 				viewerUrls.get(packageType), 
-				path.toString());
+				path.toString(),preservationSystem.getUrnNameSpace(),preservationSystem.getUrisFile());
 		
 		String[] sets = null;
 		if (checkSets){
@@ -268,7 +273,6 @@ public class SendToPresenterAction extends AbstractAction {
 		ingestDir(objectId, collection, pack, packagePath.toString(), packageType);
 		
 		// add identifiers to DC datastream
-		String url = "http://www.danrw.de/objects/" + objectId;
 		SAXBuilder builder = XMLUtils.createNonvalidatingSaxBuilder();
 		Document doc;
 		try {
@@ -286,9 +290,6 @@ public class SendToPresenterAction extends AbstractAction {
 			doc.getRootElement().addContent(
 					new Element(IDENTIFIER,DC,PURL_ORG_DC)
 					.setText(urn));
-			doc.getRootElement().addContent(
-					new Element(IDENTIFIER,DC,PURL_ORG_DC)
-					.setText(url));
 		} catch (Exception e) {
 			throw new RepositoryException("Failed to add identifiers to object in repository",e);
 		}
@@ -305,7 +306,7 @@ public class SendToPresenterAction extends AbstractAction {
 			
 			// add collection membership
 			String collectionUri;
-			if (getClosedCollectionName().equals(collection)) {
+			if (preservationSystem.getClosedCollectionName().equals(collection)) {
 				collectionUri = CLOSED_COLLECTION_URI;
 			} else {
 				collectionUri = OPEN_COLLECTION_URI;
@@ -314,11 +315,11 @@ public class SendToPresenterAction extends AbstractAction {
 			logger.debug("Added relationship: "+MEMBER_COLLECTION+" "+ collectionUri);
 			
 			// add oai identifier
-			if (!(getClosedCollectionName()+":").equals(collection) && 
+			if (!(preservationSystem.getClosedCollectionName()+":").equals(collection) && 
 				// don't add test packages to OAI-PMH
 				!testContractors.contains(contractorShortName)
 			) {
-				String oaiId = OAI_DANRW_DE + objectId;
+				String oaiId = C.OAI_DANRW_DE + objectId;
 				repositoryFacade.addRelationship(objectId, collection, OPENARCHIVES_OAI_IDENTIFIER, oaiId);
 				logger.debug("Added relationship: "+OPENARCHIVES_OAI_IDENTIFIER+" " + oaiId);
 			}
@@ -342,6 +343,7 @@ public class SendToPresenterAction extends AbstractAction {
 	private void ingestDir(String objectId, String collection, File dir, String packagePath, String packageType) throws RepositoryException, IOException {
 			
 		File files[] = dir.listFiles(new FilenameFilter() {
+			@Override
 			public boolean accept(File dir, String name) {
 				if (getFileFilter().contains(name)) return false;
 				else return true;
@@ -507,25 +509,5 @@ public class SendToPresenterAction extends AbstractAction {
 	 */
 	public void setFileFilter(Set<String> fileFilter) {
 		this.fileFilter = fileFilter;
-	}
-
-
-	public String getOpenCollectionName() {
-		return openCollectionName;
-	}
-
-
-	public void setOpenCollectionName(String openCollectionName) {
-		this.openCollectionName = openCollectionName;
-	}
-
-
-	public String getClosedCollectionName() {
-		return closedCollectionName;
-	}
-
-
-	public void setClosedCollectionName(String closedCollectionName) {
-		this.closedCollectionName = closedCollectionName;
 	}
 }

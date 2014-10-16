@@ -27,14 +27,14 @@ import static org.junit.Assert.assertTrue;
 import java.io.File;
 import java.io.IOException;
 import java.util.Calendar;
-import java.util.GregorianCalendar;
 import java.util.List;
 
 import org.junit.Test;
 
 import de.uzk.hki.da.model.Object;
-import de.uzk.hki.da.model.RightsStatement;
+import de.uzk.hki.da.model.RightsSectionMetsXmlReader;
 import de.uzk.hki.da.model.PublicationRight.Audience;
+import de.uzk.hki.da.model.RightsStatement;
 
 
 /**
@@ -50,7 +50,7 @@ public class MetsRightsSectionXmlReaderTest {
 	@Test
 	public void testRights() throws IOException {
 
-		MetsRightsSectionXmlReader reader = new MetsRightsSectionXmlReader();
+		RightsSectionMetsXmlReader reader = new RightsSectionMetsXmlReader();
 		List<RightsStatement> rights = reader.deserialize(new File("src/test/resources/metadata/darights_xml_metadata_reader_test.xml"));
 
 		System.out.println(rights);
@@ -60,7 +60,7 @@ public class MetsRightsSectionXmlReaderTest {
 		assertEquals(640,Integer.parseInt(rights.get(0).getPublicationRights().get(0).getImageRestriction().getWidth()));
 		assertEquals(480,Integer.parseInt(rights.get(0).getPublicationRights().get(0).getImageRestriction().getHeight()));
 
-		Calendar calendar = GregorianCalendar.getInstance();
+		Calendar calendar = Calendar.getInstance();
 		calendar.setTimeInMillis(0);
 		calendar.set(2023, 5, 23, 0, 0, 0);
 

@@ -22,7 +22,7 @@ package de.uzk.hki.da.grid;
 import java.io.File;
 
 import de.uzk.hki.da.core.ConfigurationException;
-import de.uzk.hki.da.utils.Path;
+import de.uzk.hki.da.core.Path;
 
 /**
  * 
@@ -31,8 +31,8 @@ import de.uzk.hki.da.utils.Path;
  */
 public class IrodsDistributedConversionAdapter implements DistributedConversionAdapter {
 
-	private IrodsSystemConnector irodsSystemConnector;
-	private Path zone;
+	protected IrodsSystemConnector irodsSystemConnector;
+	protected Path zone;
 	private String workingResource;
 	
 	@Override

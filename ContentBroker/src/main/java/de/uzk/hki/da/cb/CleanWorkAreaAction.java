@@ -26,21 +26,32 @@ import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang.NotImplementedException;
 import org.hibernate.classic.Session;
 
+import de.uzk.hki.da.action.AbstractAction;
 import de.uzk.hki.da.core.ConfigurationException;
 import de.uzk.hki.da.core.HibernateUtil;
 import de.uzk.hki.da.grid.DistributedConversionAdapter;
 import de.uzk.hki.da.model.Job;
-import de.uzk.hki.da.model.Node;
 
 public class CleanWorkAreaAction extends AbstractAction{
 
 	private DistributedConversionAdapter distributedConversionAdapter;
-	private Node presentationRepositoryNodeName;
 	
 	
 	@Override
-	boolean implementation() {
+	public void checkActionSpecificConfiguration() throws ConfigurationException {
+		// Auto-generated method stub
 		if (distributedConversionAdapter==null) throw new ConfigurationException("distributedConversionAdapter not set");
+		
+	}
+
+	@Override
+	public void checkSystemStatePreconditions() throws IllegalStateException {
+		// Auto-generated method stub
+		
+	}
+
+	@Override
+	public boolean implementation() {
 		setKILLATEXIT(true);
 		
 		// to prevent leftover files from irods collection removal we delete the dirs on the filesystem first.
@@ -58,15 +69,20 @@ public class CleanWorkAreaAction extends AbstractAction{
 		return true;
 	}
 	
+	@Override
+	public void rollback() throws Exception {
+		throw new NotImplementedException("No rollback implemented for this action");
+	}
+
 	/**
 	 * XXX code duplicated from archivereplicationcheckaction
 	 * @author Daniel M. de Oliveira Jens Peters
 	 */
 	private void createPublicationJob(){
 		
-		logger.info("Creating child job with state 540 on "+   getRepositoryNodeName().getName()+" for possible publication of this object.");
+		logger.info("Creating child job with state 540 on "+   preservationSystem.getPresServer() + " for possible publication of this object.");
 		Job child = new Job (job, "540");
-		child.setResponsibleNodeName(getRepositoryNodeName().getName());
+		child.setResponsibleNodeName( preservationSystem.getPresServer() );
 		child.setObject(getObject());
 		child.setDate_created(String.valueOf(new Date().getTime()/1000L));
 		
@@ -78,12 +94,6 @@ public class CleanWorkAreaAction extends AbstractAction{
 	}
 
 	
-	@Override
-	void rollback() throws Exception {
-		throw new NotImplementedException("No rollback implemented for this action");
-	}
-
-
 	public DistributedConversionAdapter getDistributedConversionAdapter() {
 		return distributedConversionAdapter;
 	}
@@ -92,13 +102,5 @@ public class CleanWorkAreaAction extends AbstractAction{
 	public void setDistributedConversionAdapter(
 			DistributedConversionAdapter distributedConversionAdapter) {
 		this.distributedConversionAdapter = distributedConversionAdapter;
-	}
-
-	public Node getRepositoryNodeName() {
-		return presentationRepositoryNodeName;
-	}
-
-	public void setPresentationRepositoryNodeName(Node presentationRepositoryNodeName) {
-		this.presentationRepositoryNodeName = presentationRepositoryNodeName;
 	}
 }

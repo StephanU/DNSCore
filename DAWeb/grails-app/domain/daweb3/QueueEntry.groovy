@@ -33,11 +33,15 @@ class QueueEntry {
 	String created
 	String modified
 	Object obj
+	String question
+	String answer
 
     static constraints = {
 		status(nullable:false)
 		created(nullable:true)
 		modified(nullable:true)
+		question(nullable:true)
+		answer(nullable:true)
 	}
 	
 	static mapping = {
@@ -54,8 +58,8 @@ class QueueEntry {
 	static QueueEntry getAllQueueEntriesForShortNameAndUrn(String shortName, String urn) {
 		return createCriteria().list  {
 			createAlias('obj', 'o', CriteriaSpecification.INNER_JOIN)
-			createAlias('o.contractor', 'contractor', CriteriaSpecification.INNER_JOIN)
-			eq("contractor.shortName", shortName)
+			createAlias('o.user', 'user', CriteriaSpecification.INNER_JOIN)
+			eq("user.shortName", shortName)
 			eq("o.urn", urn)
 		}
 	}
@@ -89,10 +93,44 @@ class QueueEntry {
 		return Integer.parseInt(status);
 	}
 	
+	/**
+	 * @author jpeters
+	 * Show Deletion button
+	 * @return
+	 */
 	boolean showDeletionButton() {
 		def checkfor = ["1","3","4"]
 		def ch = status[-1]
-		if (checkfor.contains(ch)) return true;
+		if (checkfor.contains(ch) && getStatusAsInteger()<401) return true;
+		return false;
+	}
+	
+	/**
+	 * Show RecoverButton on workflow items
+	 * @author jpeters 
+	 * @return
+	 */
+	
+	boolean showRecoverButton() {
+		def checkfor = ["1","3"]
+		def ch = status[-1]
+		if (checkfor.contains(ch)) {
+			if (getStatusAsInteger()>=123 & getStatusAsInteger()<=353) return true;
+		}
+		return false;
+	}
+	/**
+	 * @author jpeters 
+	 * Show Retry Button if state is 1
+	 * @return
+	 */
+	
+	boolean showRetryButton() {
+		def checkfor = ["1"]
+		def ch = status[-1]
+		if (checkfor.contains(ch)) {
+			return true;
+		}
 		return false;
 	}
 	
@@ -106,13 +144,45 @@ class QueueEntry {
 	 */
 	
 	boolean showRetryButtonAfterSomeTime(){
-		if (modified!=null && modified!="" && modified!="NULL" && modified.length()>5) {
-			long diff = new Date().getTime()-Long.valueOf(modified).longValue()*1000L;
-			if (diff > 2 * 24 * 60 * 60 * 1000) {
-				return true;
+		def checkfor = ["2"]
+		def ch = status[-1]
+		if (checkfor.contains(ch)) {
+			if (modified!=null && modified!="" && modified!="NULL" && modified.length()>5) {
+				long diff = new Date().getTime()-Long.valueOf(modified).longValue()*1000L;
+				if (diff > 2 * 24 * 60 * 60 * 1000) {
+					return true;
+				}
 			}
 		}
 		return false;
 	}
 	
+	String getInformation() {
+			if (getStatusAsInteger()<440) {
+					def checkfor = ["2","0"]
+					def ch = status[-1]
+					if (checkfor.contains(ch)) {
+						return "arbeitend (" + status +")"
+					} else return "fehlerhaft (" + status +")"
+			} 
+			if (getStatusAsInteger()>=440 && getStatusAsInteger()<500 ) {
+				def checkfor = ["2","0"]
+				def ch = status[-1]
+				if (checkfor.contains(ch)) {
+					return "repliziere (" + status +")"
+				} else return "Replikation fehlerhaft (" + status +")"
+		}
+		
+			if (getStatusAsInteger()>500 && getStatusAsInteger()<600) {
+					def checkfor = ["2","0"]
+					def ch = status[-1]
+					if (checkfor.contains(ch)) {
+						return "archiviert. Verarbeite PIP (" + status +")"
+					} else return "archiviert. Fehler beim PIP (" + status +")"
+			}
+			if (getStatusAsInteger()>640 && getStatusAsInteger()<=645 ) {
+				return "Warten auf Rückfrage (" + status +")"
+			}
+			return status
+	}
 }

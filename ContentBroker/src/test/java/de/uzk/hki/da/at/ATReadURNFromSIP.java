@@ -24,8 +24,6 @@ import java.io.File;
 import java.io.IOException;
 
 import org.apache.commons.io.FileUtils;
-import org.junit.After;
-import org.junit.Before;
 import org.junit.Test;
 
 import de.uzk.hki.da.model.Object;
@@ -34,33 +32,15 @@ import de.uzk.hki.da.model.Object;
  * @author Thomas Kleinke
  *
  */
-public class ATReadURNFromSIP extends Base {
-
-	/**
-	 * @throws java.lang.Exception
-	 */
-	@Before
-	public void setUp() throws Exception {
-		setUpBase();
-	}
-
-	/**
-	 * @throws IOException 
-	 * @throws java.lang.Exception
-	 */
-	@After
-	public void tearDown(){
-		clearDB();
-		cleanStorage();
-	}
+public class ATReadURNFromSIP extends AcceptanceTest {
 
 	@Test
 	public void test() throws IOException, InterruptedException {
 		String originalName = "ATReadURNFromSIP";
 		FileUtils.copyFileToDirectory(new File("src/test/resources/at/"+originalName+".tgz"), 
 				new File(localNode.getIngestAreaRootPath()+"/TEST"));
-		waitForJobsToFinish(originalName,500);
-		Object object = fetchObjectFromDB(originalName);
+		ath.waitForJobsToFinish(originalName);
+		Object object = ath.fetchObjectFromDB(originalName);
 		
 		assertEquals("urn:nbn:de:xyz-1-20131008367735", object.getUrn());
 	}

@@ -24,9 +24,11 @@ import java.io.IOException;
 
 import org.apache.commons.io.FileUtils;
 
-import de.uzk.hki.da.utils.BagitUtils;
-import de.uzk.hki.da.utils.Path;
-import de.uzk.hki.da.utils.RelativePath;
+import de.uzk.hki.da.action.AbstractAction;
+import de.uzk.hki.da.core.ConfigurationException;
+import de.uzk.hki.da.core.Path;
+import de.uzk.hki.da.core.RelativePath;
+import de.uzk.hki.da.pkg.BagitUtils;
 
 /**
  * <ol>
@@ -39,12 +41,15 @@ import de.uzk.hki.da.utils.RelativePath;
 public class BuildAIPAction extends AbstractAction {
 
 	@Override
-	boolean implementation() {
+	public void checkActionSpecificConfiguration() throws ConfigurationException {
+		// Auto-generated method stub
+	}
+
+	@Override
+	public boolean implementation() {
 
 		Path relativePathOfSource = new RelativePath(object.getContractor().getShort_name(),object.getIdentifier());
 		Path physicalPackagePathOfSource = Path.make(localNode.getWorkAreaRootPath(),"work",relativePathOfSource);
-		
-		
 		
 		logger.info ( "Preparing AIP at \"" + physicalPackagePathOfSource +"\" for archival." );
 		deleteOldPremisFile();
@@ -55,7 +60,7 @@ public class BuildAIPAction extends AbstractAction {
 	}
 
 	@Override
-	void rollback() throws Exception {
+	public void rollback() throws Exception {
 		
 		logger.debug("Deleting bagit files from source");
 		try{
@@ -110,5 +115,11 @@ public class BuildAIPAction extends AbstractAction {
 		logger.debug("Deleting " + oldPremis.getAbsolutePath());
 				
 		oldPremis.delete();
+	}
+
+	@Override
+	public void checkSystemStatePreconditions() throws IllegalStateException {
+		// TODO Auto-generated method stub
+		
 	}
 }

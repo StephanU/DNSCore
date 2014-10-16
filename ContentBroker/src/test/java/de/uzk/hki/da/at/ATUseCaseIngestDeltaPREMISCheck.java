@@ -31,6 +31,7 @@ import java.io.File;
 import java.io.IOException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.List;
 
 import org.apache.commons.io.FileUtils;
@@ -42,12 +43,14 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import de.uzk.hki.da.core.C;
+import de.uzk.hki.da.core.Path;
 import de.uzk.hki.da.model.Object;
-import de.uzk.hki.da.utils.C;
-import de.uzk.hki.da.utils.Path;
-import de.uzk.hki.da.utils.TC;
+import de.uzk.hki.da.test.TC;
 
 /**
+ * Tests the aspect of proper PREMIS file creation for deltas.
+ * 
  * @author Daniel M. de Oliveira
  * @author Thomas Kleinke
  */
@@ -56,29 +59,21 @@ public class ATUseCaseIngestDeltaPREMISCheck extends PREMISBase {
 	Object object = null;
 	private static final String ORIG_NAME = "ATUseCaseIngestDelta";
 	private static final String IDENTIFIER =   "ATUseCaseIngestDeltaIdentifier";
-	private static final String containerName = ORIG_NAME+"."+C.TGZ;
+	private static final String containerName = ORIG_NAME+"."+C.FILE_EXTENSION_TGZ;
+	private static final File unpackedDIP = new File("/tmp/ATUseCaseIngestDeltaPREMISCheck");
 	
 
 	@Before
 	public void setUp() throws IOException{
-		setUpBase();
 
-		object = putPackageToStorage(IDENTIFIER,ORIG_NAME,containerName);
+		object = ath.putPackageToStorage(IDENTIFIER,ORIG_NAME,containerName,new Date(),100);
 		FileUtils.copyFile(Path.makeFile(TC.TEST_ROOT_AT,ORIG_NAME+"2.tgz"), 
 				Path.makeFile(localNode.getIngestAreaRootPath(),C.TEST_USER_SHORT_NAME,containerName));
 	}
 	
 	@After
-	public void tearDown(){
-		try{
-			new File("/tmp/"+object.getIdentifier()+".pack_2.tar").delete();
-			FileUtils.deleteDirectory(new File("/tmp/"+object.getIdentifier()+".pack_2"));
-		}catch(Exception e){
-			System.out.println(e.getMessage());
-		}
-		
-		clearDB();
-		cleanStorage();
+	public void tearDown() throws IOException{
+		FileUtils.deleteDirectory(unpackedDIP);
 	}
 	
 
@@ -87,13 +82,13 @@ public class ATUseCaseIngestDeltaPREMISCheck extends PREMISBase {
 	@Test
 	public void testProperPREMISCreation() throws Exception{
 		
-		waitForJobsToFinish(ORIG_NAME,500);
-		object = retrievePackage(ORIG_NAME,"2");
+		object = ath.waitForJobsToFinish(ORIG_NAME);
+		object = ath.retrievePackage(object,unpackedDIP,"2");
 		
 		assertEquals(ORIG_NAME,object.getOrig_name());
 		assertEquals(100,object.getObject_state());
 		checkPremis(object.getIdentifier(),
-				"/tmp/" + object.getIdentifier() + ".pack_2/data/"
+				unpackedDIP.getAbsolutePath() + "/data/"
 				);
 	}
 	
@@ -137,7 +132,7 @@ public class ATUseCaseIngestDeltaPREMISCheck extends PREMISBase {
 			if (identifierText.equals(objectIdentifier)) {
 				Element identifierEl = e.getChild("objectIdentifier", ns);
 				assertEquals(objectIdentifier, identifierEl.getChildText("objectIdentifierValue", ns));
-				String originalName = (String) e.getChildText("originalName", ns);
+				String originalName = e.getChildText("originalName", ns);
 				assertEquals(object.getOrig_name(),originalName);
 				checkedObjects++;
 			}				

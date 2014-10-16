@@ -21,6 +21,7 @@ package de.uzk.hki.da.grid;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileFilter;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -28,6 +29,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.commons.io.filefilter.WildcardFileFilter;
 import org.irods.jargon.core.connection.IRODSAccount;
 import org.irods.jargon.core.connection.IRODSAccount.AuthScheme;
 import org.irods.jargon.core.connection.IRODSCommands;
@@ -567,31 +569,6 @@ public class IrodsSystemConnector {
 		}
 	}
 	
-	/**
-	 * NOT Working YET!
-	 * 
-	 * @param name
-	 * @return
-	 * @author Jens Peters
-	 */
-	
-	public boolean isRuleActivated(String name) {
-		List<DelayedRuleExecution> list;
-		try {
-			list = getRuleProcessingAO().listAllDelayedRuleExecutions(0);
-		for (DelayedRuleExecution de: list) {
-			logger.debug("ID:" + de.getId());
-			logger.debug(de.toString());
-	
-			if (de.getName().equals(name)) return true;
-		}
-		} catch (JargonException e) {
-			throw new IrodsRuntimeException("Error while Rule status " + name
-					+ " " + e.getUnderlyingIRODSExceptionCode(), e);
-		}
-		return false;
-	}
-
 	/**
 	 * Exceutes rule from the given file, populated with parameters 
 	 * 
@@ -1324,6 +1301,7 @@ public class IrodsSystemConnector {
 	 * @author Jens Peters
 	 */
 	
+	@Deprecated
 	public String verifyChecksumAll(String data_name) {
 		if (!fileExists(data_name)) throw new IrodsRuntimeException(data_name + " does not exist");
 		
@@ -1508,6 +1486,7 @@ public class IrodsSystemConnector {
 	 * @deprecated
 	 * @author Jens Peters
 	 */
+	@Deprecated
 	public String copyDAO(String data_name, String dest_data_name, String destResc) {
 		String copy = "copy||msiDataObjCopy(" + data_name +"," + dest_data_name + ", destRescName=" +  destResc +"++++forceFlag=++++verifyChksum=,*copy)|nop\n"
 		 + "null\n"
@@ -1631,6 +1610,7 @@ public class IrodsSystemConnector {
 	 * @deprecated
 	 * @author Jens Peters
 	 */
+	@Deprecated
 	public void buildTar(String targetDataObject, String sourceCollection, String workingRes) {
 		String tarRule =
 			"tar||"+	
@@ -1645,6 +1625,46 @@ public class IrodsSystemConnector {
 	}
 	
 	/**
+	 * Start all (delayed) rules in folder
+	 * @author Jens Peters
+	 * @param folder
+	 * @return
+	 */
+	public boolean startAllDelayedRules(String folder) {
+		stopAllDelayedRules();
+		boolean allPass = true;
+		logger.debug("Start all rules in folder " + folder);
+		 File dir = new File(folder);
+		 FileFilter fileFilter = new WildcardFileFilter("*.r");
+		 File[] files = dir.listFiles(fileFilter);
+		 for (int i = 0; i < files.length; i++) {
+			 logger.debug("Executing rule now " + files[i]);
+			 try {
+				executeRuleFromFile(files[i], null);
+			} catch (IOException e) {
+			logger.error(files[i].getName() + " execution failed" );
+			allPass = false;
+			}
+		 }
+		 return allPass;
+	}
+	
+	/**
+	 * Stops all delayed exceuted rules
+	 * @author Jens Peters
+	 * @return
+	 */
+	
+	public int stopAllDelayedRules() {
+		logger.debug("Stop all delayed rules");
+		try {
+			return getRuleProcessingAO().purgeAllDelayedExecQueue();
+		} catch (JargonException e) {
+			throw new IrodsRuntimeException("stop delayed rule execution failed");
+		}
+	}
+	
+	/**
 	 * Federation to other zones.
 	 *
 	 * @param data_name the data_name
@@ -1655,7 +1675,8 @@ public class IrodsSystemConnector {
 	 * @author Jens Peters
 	 */
 	
-	 public void federateDataObjectToZoneAsynchronously(String data_name, String zone, String destPath, String destresource) {
+	 @Deprecated
+	public void federateDataObjectToZoneAsynchronously(String data_name, String zone, String destPath, String destresource) {
 		 	String resc = "null";
 			if (!destresource.equals("")) {
 				resc=destresource;

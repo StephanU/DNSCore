@@ -2,7 +2,7 @@ package daweb3
 /*
  DA-NRW Software Suite | ContentBroker
  Copyright (C) 2013 Historisch-Kulturwissenschaftliche Informationsverarbeitung
- Universität zu Köln
+ Universität zu Köln, 2014 LVRInfoKom
 
  This program is free software: you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
@@ -19,27 +19,103 @@ package daweb3
 */
 
 
-import org.irods.jargon.core.connection.IRODSAccount
-import org.irods.jargon.core.connection.IRODSProtocolManager
-import org.irods.jargon.core.connection.IRODSSession
-import org.irods.jargon.core.pub.IRODSAccessObjectFactory
-import org.irods.jargon.core.pub.UserAO
-import org.irods.jargon.core.connection.IRODSSimpleProtocolManager
-import org.irods.jargon.core.exception.JargonException;
-import org.irods.jargon.core.pub.IRODSAccessObjectFactoryImpl;
+import static org.springframework.http.HttpStatus.*
+import grails.transaction.Transactional
 
+@Transactional(readOnly = true)
 class UserController {
-	
-	def login = {
-		redirect(controller: "contractor", action:"login")
-	}
 
-	def logout = {
-		redirect(controller: "contractor", action:"logout")
-		
-	}
+    static allowedMethods = [save: "POST", update: "PUT", delete: "DELETE"]
 
-	def index = {
-		redirect(controller: "contractor", action:"login")
-	}
+    def index(Integer max) {
+        params.max = Math.min(max ?: 10, 100)
+        respond User.list(params), model:[userInstanceCount: User.count()]
+    }
+
+    def show(User userInstance) {
+        respond userInstance
+    }
+
+    def create() {
+        respond new User(params)
+    }
+
+    @Transactional
+    def save(User userInstance) {
+        if (userInstance == null) {
+            notFound()
+            return
+        }
+
+        if (userInstance.hasErrors()) {
+            respond userInstance.errors, view:'create'
+            return
+        }
+
+        userInstance.save flush:true
+
+        request.withFormat {
+            form {
+                flash.message = message(code: 'default.created.message', args: [message(code: 'userInstance.label', default: 'User'), userInstance.id])
+                redirect userInstance
+            }
+            '*' { respond userInstance, [status: CREATED] }
+        }
+    }
+
+    def edit(User userInstance) {
+        respond userInstance
+    }
+
+    @Transactional
+    def update(User userInstance) {
+        if (userInstance == null) {
+            notFound()
+            return
+        }
+
+        if (userInstance.hasErrors()) {
+            respond userInstance.errors, view:'edit'
+            return
+        }
+
+        userInstance.save flush:true
+
+        request.withFormat {
+            form {
+                flash.message = message(code: 'default.updated.message', args: [message(code: 'User.label', default: 'User'), userInstance.id])
+                redirect userInstance
+            }
+            '*'{ respond userInstance, [status: OK] }
+        }
+    }
+
+    @Transactional
+    def delete(User userInstance) {
+
+        if (userInstance == null) {
+            notFound()
+            return
+        }
+
+        userInstance.delete flush:true
+
+        request.withFormat {
+            form {
+                flash.message = message(code: 'default.deleted.message', args: [message(code: 'User.label', default: 'User'), userInstance.id])
+                redirect action:"index", method:"GET"
+            }
+            '*'{ render status: NO_CONTENT }
+        }
+    }
+
+    protected void notFound() {
+        request.withFormat {
+            form {
+                flash.message = message(code: 'default.not.found.message', args: [message(code: 'userInstance.label', default: 'User'), params.id])
+                redirect action: "index", method: "GET"
+            }
+            '*'{ render status: NOT_FOUND }
+        }
+    }
 }

@@ -32,7 +32,6 @@ import javax.persistence.Id;
 import javax.persistence.JoinColumn;
 import javax.persistence.ManyToOne;
 import javax.persistence.OneToMany;
-import javax.persistence.PrimaryKeyJoinColumn;
 import javax.persistence.Table;
 
 import org.hibernate.annotations.Cascade;
@@ -58,6 +57,10 @@ public class Job {
 	/** The status. */
 	private String status;
 
+	private String question = "";
+	
+	private String answer = "";
+	
 	/** 
 	 * The name of the node of the system which is instructed to do the job.
 	 */
@@ -85,9 +88,9 @@ public class Job {
 	
 	
 	/** The contractor. */
-	@ManyToOne
-	@PrimaryKeyJoinColumn( name = "contractor_id" )
-	private Contractor contractor;
+//	@ManyToOne
+//	@PrimaryKeyJoinColumn( name = "user_id" )
+//	private User user;
 	
 	/** The children. */
 	@OneToMany (orphanRemoval = true )
@@ -127,7 +130,7 @@ public class Job {
 		this.status=status;
 		this.rep_name=rhs.rep_name;
 		this.responsibleNodeName=rhs.responsibleNodeName;
-		this.contractor = rhs.contractor;
+//		this.user = rhs.user;
 	}
 
 	
@@ -388,5 +391,23 @@ public class Job {
 
 	public void setContainer_extension(String container_extension) {
 		this.container_extension = container_extension;
+	}
+
+	public String getAnswer() {
+		return answer;
+	}
+
+	public void setAnswer(String answer) {
+		if (answer==null) answer="";
+		this.answer = answer;
+	}
+
+	public String getQuestion() {
+		return question;
+	}
+
+	public void setQuestion(String question) {
+		if (question==null) question="";
+		this.question = question;
 	}
 }

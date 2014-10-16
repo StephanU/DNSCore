@@ -16,19 +16,17 @@
 		<property name="endStatus" value="550" />
 		<property name="name" value="FetchPIPsAction" />
 		<property name="ingestGate" ref="ingestGate" />
-		<property name="distributedConversionAdapter" ref="${cb.implementation.distributedConversion}" />
+		<property name="distributedConversionAdapter" ref="${cb.implementation.distributedConversion:fakeDistributedConversionAdapter}" />
 	</bean>
 	<bean id="SendToPresenterAction" class="de.uzk.hki.da.cb.SendToPresenterAction"
 		scope="prototype">
 		<property name="startStatus" value="550" />
 		<property name="endStatus" value="560" />
-		<property name="repositoryFacade" ref="${cb.implementation.repository}" />
+		<property name="repositoryFacade" ref="${cb.implementation.repository:fakeRepositoryFacade}" />
 		<property name="name" value="SendToPresenterAction" />
 		<property name="viewerUrls" ref="viewerUrls" />
 		<property name="testContractors" ref="testContractors" />
 		<property name="dcReader" ref="dcReader" />
-		<property name="openCollectionName" value="${system.openCollectionName}" />
-		<property name="closedCollectionName" value="${system.closedCollectionName}" />
 		<property name="fileFilter">
 	        <set>
 	            <value>premis.xml</value>
@@ -40,11 +38,8 @@
 		scope="prototype">
 		<property name="startStatus" value="560" />
 		<property name="endStatus" value="570" />
-		<property name="repositoryFacade" ref="${cb.implementation.repository}" />
+		<property name="repositoryFacade" ref="${cb.implementation.repository:fakeRepositoryFacade}" />
 		<property name="name" value="CreateEDMAction" />
-		<property name="choBaseUri" value="${system.uris.cho}" />
-		<property name="aggrBaseUri" value="${system.uris.aggr}" />
-		<property name="localBaseUri" value="${system.uris.local}" />
 		<property name="edmMappings">
 			<map>
 				<entry key="METS" value="conf/xslt/edm/mets-mods_to_edm.xsl" />
@@ -58,16 +53,10 @@
 		scope="prototype">
 		<property name="startStatus" value="570" />
 		<property name="endStatus" value="579" />
-		<property name="repositoryFacade" ref="${cb.implementation.repository}" />
+		<property name="repositoryFacade" ref="${cb.implementation.repository:fakeRepositoryFacade}" />
 		<property name="name" value="IndexMetadataAction" />
 		<property name="indexName" value="${elasticsearch.index}" />
 		<property name="testContractors" ref="testContractors" />
-		<property name="frames">
-			<map>
-				<entry key="conf/frame.jsonld" value="EDM" />
-			</map>
-		</property>
-		<property name="contextUriPrefix" value="http://data.danrw.de/contexts/" />
 	</bean>
 	<!-- END Fedora and ElasticSearch related END -->
 	

@@ -19,29 +19,22 @@
 
 package de.uzk.hki.da.at;
 
-import java.io.IOException;
-
 import org.apache.commons.io.FileUtils;
 import org.junit.After;
-import org.junit.Before;
 import org.junit.Test;
 
+import de.uzk.hki.da.core.Path;
 import de.uzk.hki.da.model.Object;
-import de.uzk.hki.da.utils.Path;
 
 /**
  * Relates to AK-T/02 Ingest - Sunny Day Szenario (mit besonderen Bedingungen).
  * @author Daniel M. de Oliveira
  */
-public class ATUseCaseIngestSpecialCases extends Base{
+public class ATUseCaseIngestSpecialCases extends AcceptanceTest{
 
+	private static final String YEAH = "yeah!";
 	private String originalName = "ATUseCaseIngest1";
 	private Object object;
-	
-	@Before
-	public void setUp() throws IOException{
-		setUpBase();
-	}
 	
 	@After
 	public void tearDown(){
@@ -51,65 +44,62 @@ public class ATUseCaseIngestSpecialCases extends Base{
 		Path.make(localNode.getIngestAreaRootPath(),"/TEST/AT_CON1.tar").toFile().delete();
 		Path.make(localNode.getIngestAreaRootPath(),"/TEST/AT_CON2.tgz").toFile().delete();
 		Path.make(localNode.getIngestAreaRootPath(),"/TEST/AT_CON3.zip").toFile().delete();
-		
-		clearDB();
-		cleanStorage();
 	}
 	
 	@Test
 	public void testUmlautsInPackageName() throws Exception{
 		
 		originalName = "ATÜÄÖ";
-		object = ingest(originalName);
-		System.out.println("yeah!");
+		object = ath.ingest(originalName);
+		System.out.println(YEAH);
 	}
 	
 	@Test
 	public void testSpecialCharactersInFileNames() throws Exception{
 		
 		originalName = "ATSonderzeichen_in_Dateinamen";
-		object = ingest(originalName);
-		System.out.println("yeah!");
+		object = ath.ingest(originalName);
+		System.out.println(YEAH);
 	}
 	
 	@Test
 	public void testUmlautsInFileNames() throws Exception{
 		
 		originalName = "ATUmlaute_in_Dateinamen";
-		object = ingest(originalName);
-		System.out.println("yeah!");
+		object = ath.ingest(originalName);
+		System.out.println(YEAH);
 	}
 	
 	@Test
 	public void testTARContainer() throws Exception{
 		
 		originalName = "AT_CON1";
-		object = ingest(originalName,"tar");
-		System.out.println("yeah!");
+		object = ath.ingest(originalName,"tar",originalName);
+		System.out.println(YEAH);
 	}
 	
 	@Test
 	public void testTGZContainer() throws Exception{
 		
 		originalName = "AT_CON2";
-		object = ingest(originalName);
-		System.out.println("yeah!");
+		object = ath.ingest(originalName);
+		System.out.println(YEAH);
 	}
 	
 	@Test
 	public void testZIPContainer() throws Exception{
 		
 		originalName = "AT_CON3";
-		object = ingest(originalName,"zip");
-		System.out.println("yeah!");
+		object = ath.ingest(originalName,"zip",originalName);
+		System.out.println(YEAH);
 	}
 	
 	@Test
 	public void testSpecialCharsInPackageName() throws Exception{
 		
 		originalName = "AT&Sonderzeichen%in#Paketnamen";
-		object = ingest(originalName);
-		System.out.println("yeah!");
+		object = ath.ingest(originalName);
+		System.out.println(YEAH);
 	}
 	
 	
@@ -118,7 +108,7 @@ public class ATUseCaseIngestSpecialCases extends Base{
 	public void testWhiteSpacesInFileNames() throws Exception{
 		
 		originalName = "ATLeerzeichen_in_Dateinamen";
-		object = ingest(originalName);
-		System.out.println("yeah!");
+		object = ath.ingest(originalName);
+		System.out.println(YEAH);
 	}
 }

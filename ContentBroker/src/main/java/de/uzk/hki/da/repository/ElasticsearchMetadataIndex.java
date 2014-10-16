@@ -41,23 +41,15 @@ public class ElasticsearchMetadataIndex implements MetadataIndex {
 	
 	private String[] hosts;
 	private String cluster;
+
+	private TransportClient client;
 	
 	@Override
 	public void indexMetadata(String indexName, String type, String objectId,
 			Map<String, Object> data) throws MetadataIndexException {
-				
-		if (cluster == null || hosts == null || hosts.length == 0) 
-			throw new ConfigurationException("Elasticsearch cluster not set. Make sure the action is configured properly");
-				
-		Settings settings = ImmutableSettings.settingsBuilder()
-		        .put("cluster.name", cluster).build();
-		logger.debug("set cluster.name: {}", cluster);
-		TransportClient client = new TransportClient(settings);
-		for (String esHost : hosts) {
-			client.addTransportAddress(new InetSocketTransportAddress(esHost, 9300));
-		}
-		
-		logger.debug("set elasticsearch nodes: {}", client.transportAddresses());
+
+		client = initialize();
+		if (client==null) throw new IllegalStateException("transport client not initialized");
 		
 		try {
 			client.prepareIndex(indexName, type)
@@ -68,6 +60,21 @@ public class ElasticsearchMetadataIndex implements MetadataIndex {
 			client.close();
 		}
 		
+	}
+
+	private TransportClient initialize() {
+		
+		if (cluster == null || hosts == null || hosts.length == 0) 
+			throw new ConfigurationException("Elasticsearch cluster not set. Make sure the action is configured properly");
+				
+		Settings settings = ImmutableSettings.settingsBuilder()
+		        .put("cluster.name", cluster).build();
+		logger.debug("set cluster.name: {}", cluster);
+		TransportClient client = new TransportClient(settings);
+		for (String esHost : hosts) {
+			client.addTransportAddress(new InetSocketTransportAddress(esHost, 9300));
+		}
+		return client;
 	}
 
 	public String[] getHosts() {

@@ -27,12 +27,13 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import de.uzk.hki.da.core.Path;
 import de.uzk.hki.da.grid.GridFacade;
-import de.uzk.hki.da.model.Contractor;
+import de.uzk.hki.da.model.PreservationSystem;
+import de.uzk.hki.da.model.User;
 import de.uzk.hki.da.model.Node;
 import de.uzk.hki.da.model.Object;
 import de.uzk.hki.da.model.Package;
-import de.uzk.hki.da.utils.Path;
 
 /**
  * @author Daniel M. de Oliveira
@@ -41,7 +42,7 @@ public class ArchiveReplicationActionTests {
 	
 	private static String workAreaRootPath;
 	private static Node node = new Node();
-
+	private static PreservationSystem ps = new PreservationSystem();
 	Object object = new Object();
 	
 	@BeforeClass
@@ -58,7 +59,8 @@ public class ArchiveReplicationActionTests {
 	@Test
 	public void testHappyPath() throws FileNotFoundException, IOException{
 		node.setReplDestinations("");
-		Contractor c = new Contractor();
+		
+		User c = new User();
 		c.setShort_name("TEST");
 		c.setForbidden_nodes("");
 		object.setContractor(c);
@@ -70,7 +72,7 @@ public class ArchiveReplicationActionTests {
 	@Test
 	public void testReplDestsNotSet() throws FileNotFoundException, IOException{
 		node.setReplDestinations(null);
-		Contractor c = new Contractor();
+		User c = new User();
 		c.setShort_name("TEST");
 		c.setForbidden_nodes("");
 		object.setContractor(c);
@@ -81,7 +83,7 @@ public class ArchiveReplicationActionTests {
 	@Test
 	public void testForbiddenNodesNotSet() throws FileNotFoundException, IOException{
 		node.setReplDestinations("");
-		Contractor c = new Contractor();
+		User c = new User();
 		c.setShort_name("TEST");
 		c.setForbidden_nodes(null);
 		object.setContractor(c);
@@ -99,6 +101,8 @@ public class ArchiveReplicationActionTests {
 	
 	private ArchiveReplicationAction setUpAction(Node node){
 		ArchiveReplicationAction action = new ArchiveReplicationAction();
+		ps.setMinRepls(0);
+		action.setPSystem(ps);
 		GridFacade grid = mock (GridFacade.class);
 		action.setGridRoot(grid);
 		action.setObject(object);

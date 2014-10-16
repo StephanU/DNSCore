@@ -26,14 +26,15 @@ import org.apache.commons.lang.NotImplementedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.hp.hpl.jena.shared.ConfigException;
-
+import de.uzk.hki.da.action.AbstractAction;
+import de.uzk.hki.da.core.ConfigurationException;
 import de.uzk.hki.da.core.UserException;
 import de.uzk.hki.da.core.UserException.UserExceptionId;
-import de.uzk.hki.da.metadata.MetsURNXmlReader;
-import de.uzk.hki.da.metadata.PremisXmlReader;
+import de.uzk.hki.da.ff.FFConstants;
 import de.uzk.hki.da.model.DAFile;
+import de.uzk.hki.da.model.RightsSectionURNMetsXmlReader;
 import de.uzk.hki.da.model.Object;
+import de.uzk.hki.da.model.ObjectPremisXmlReader;
 
 
 /**
@@ -46,47 +47,18 @@ public class RegisterURNAction extends AbstractAction {
 	
 	static final Logger logger = LoggerFactory.getLogger(RegisterURNAction.class);
 	
-	private String nameSpace;
-
-	@Override
-	boolean implementation() {
-		if (nameSpace==null) throw new ConfigException("URN NameSpace parameter not set!");
-		
-		if (object.isDelta())
-			logger.info("Object URN: " + object.getUrn());
-		else {
-			String urn;
-
-			String premisUrn = extractURNFromPremisFile();
-			if (premisUrn != null)
-				urn = premisUrn;
-			else {				
-				String metsUrn = extractURNFromMetsFile();
-				
-				if (metsUrn != null)
-					urn = metsUrn;
-				else				
-					urn = nameSpace + "-" + object.getIdentifier();
-			}
-			
-			logger.info("Object URN: " + urn);
-			object.setUrn(urn);
-		}	
-		
-		return true;
-	}	
-	
 	/**
 	 * @author Thomas Kleinke
 	 * @return URN if the SIP premis file contains an URN; otherwise null
 	 */
 	private String extractURNFromPremisFile() {
 		
-		File premisFile = new File(object.getDataPath() + "/"+ object.getNameOfNewestRep() + "/" + "premis.xml");
+//		File premisFile = new File(object.getDataPath() + "/"+ object.getNameOfNewestRep() + "/" + "premis.xml");
+		File premisFile = object.getLatest("premis.xml").toRegularFile();
 		
 		
 		Object premisObject = null;
-		PremisXmlReader reader = new PremisXmlReader();
+		ObjectPremisXmlReader reader = new ObjectPremisXmlReader();
 		try {
 			premisObject = reader.deserialize(premisFile);
 		} catch (Exception e) {
@@ -114,13 +86,16 @@ public class RegisterURNAction extends AbstractAction {
 		
 		List<DAFile> files = object.getLatestPackage().getFiles();
 		for (DAFile file : files) {
-			if (file.getFormatPUID().equals("danrw-fmt/1"))
+			if(!file.getRelative_path().contains("XMP.rdf")) {
+				if (file.getFormatPUID().equals(FFConstants.METS_PUID))
 				metsFile = file;
+			}
+			
 		}
 
 		if (metsFile != null) {
 			String urn = null;
-			MetsURNXmlReader metsUrnReader = new MetsURNXmlReader();
+			RightsSectionURNMetsXmlReader metsUrnReader = new RightsSectionURNMetsXmlReader();
 			try {
 				urn = metsUrnReader.readURN(metsFile.toRegularFile());
 			} catch (Exception e) {
@@ -138,12 +113,46 @@ public class RegisterURNAction extends AbstractAction {
 		return null;
 	}
 	
-	public void setNameSpace(String nameSpace) {
-		this.nameSpace = nameSpace;
+
+	@Override
+	public void checkActionSpecificConfiguration() throws ConfigurationException {
+		// Auto-generated method stub
 	}
 
 	@Override
-	void rollback() {
+	public void checkSystemStatePreconditions() throws IllegalStateException {
+		if (preservationSystem.getUrnNameSpace()==null) throw new IllegalStateException("URN NameSpace parameter not set!");
+	}
+
+	@Override
+	public boolean implementation() {
+		
+		if (object.isDelta())
+			logger.info("Object URN: " + object.getUrn());
+		else {
+			String urn;
+	
+			String premisUrn = extractURNFromPremisFile();
+			if (premisUrn != null)
+				urn = premisUrn;
+			else {				
+				String metsUrn = extractURNFromMetsFile();
+				
+				if (metsUrn != null)
+					urn = metsUrn;
+				else				
+					urn = preservationSystem.getUrnNameSpace() + "-" + object.getIdentifier();
+			}
+			
+			logger.info("Object URN: " + urn);
+			object.setUrn(urn);
+		}	
+		
+		return true;
+	}
+
+	@Override
+	public void rollback() {
 		throw new NotImplementedException("No rollback implemented for this action");
 	}
 }

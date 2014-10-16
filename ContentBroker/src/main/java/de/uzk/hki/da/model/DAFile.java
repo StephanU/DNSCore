@@ -32,7 +32,8 @@ import javax.persistence.Transient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import de.uzk.hki.da.utils.Path;
+import de.uzk.hki.da.core.Path;
+import de.uzk.hki.da.ff.IFileWithFileFormat;
 
 
 /**
@@ -52,7 +53,7 @@ import de.uzk.hki.da.utils.Path;
  */
 @Entity
 @Table(name="dafiles")
-public class DAFile{
+public class DAFile implements IFileWithFileFormat{
 
 	/** The Constant logger. */
 	static final Logger logger = LoggerFactory.getLogger(DAFile.class);
@@ -86,9 +87,6 @@ public class DAFile{
 	
 	/** The size. */
 	private String size;
-	
-	/** The path to jhove output. */
-	private String pathToJhoveOutput;
 	
 	/**
 	 * Instantiates a new dA file.
@@ -261,25 +259,6 @@ public class DAFile{
 	 */
 	public void setConversion_instruction_id(int conversion_instruction_id) {
 		this.conversion_instruction_id = conversion_instruction_id;
-	}
-
-	/**
-	 * Gets the path to jhove output.
-	 *
-	 * @return the path to jhove output
-	 */
-	@Column(name="path_to_jhove_output")
-	public String getPathToJhoveOutput(){
-		return pathToJhoveOutput;
-	}
-	
-	/**
-	 * Sets the path to jhove output.
-	 *
-	 * @param pathToJhoveOutput the new path to jhove output
-	 */
-	public void setPathToJhoveOutput(String pathToJhoveOutput) {
-		this.pathToJhoveOutput = pathToJhoveOutput;
 	}
 
 	/**

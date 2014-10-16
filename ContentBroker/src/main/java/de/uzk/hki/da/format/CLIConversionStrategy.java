@@ -31,12 +31,12 @@ import org.apache.commons.io.FilenameUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import de.uzk.hki.da.core.Path;
 import de.uzk.hki.da.model.ConversionInstruction;
 import de.uzk.hki.da.model.DAFile;
 import de.uzk.hki.da.model.Event;
 import de.uzk.hki.da.model.Object;
 import de.uzk.hki.da.model.Package;
-import de.uzk.hki.da.utils.Path;
 import de.uzk.hki.da.utils.SimplifiedCommandLineConnector;
 import de.uzk.hki.da.utils.Utilities;
 
@@ -72,16 +72,17 @@ public class CLIConversionStrategy implements ConversionStrategy{
 	 * @return the list
 	 * @throws FileNotFoundException the file not found exception
 	 */
+	@Override
 	public List<Event> convertFile(ConversionInstruction ci) throws FileNotFoundException {
 		if (pkg==null) throw new IllegalStateException("Package not set");
-		Path.make(object.getDataPath(),object.getNameOfNewestRep(),ci.getTarget_folder()).toFile().mkdirs();
+		Path.make(object.getDataPath(),object.getPath("newest").getLastElement(),ci.getTarget_folder()).toFile().mkdirs();
 		
-		String[] commandAsArray = assemble(ci, object.getNameOfNewestRep());
+		String[] commandAsArray = assemble(ci, object.getPath("newest").getLastElement());
 		if (!cliConnector.execute(commandAsArray)) throw new RuntimeException("convert did not succeed");
 		
 		String targetSuffix= ci.getConversion_routine().getTarget_suffix();
 		if (targetSuffix.equals("*")) targetSuffix= FilenameUtils.getExtension(ci.getSource_file().toRegularFile().getAbsolutePath());
-		DAFile result = new DAFile(pkg,object.getNameOfNewestRep(),
+		DAFile result = new DAFile(pkg,object.getPath("newest").getLastElement(),
 				ci.getTarget_folder()+"/"+FilenameUtils.removeExtension(Matcher.quoteReplacement(
 				FilenameUtils.getName(ci.getSource_file().toRegularFile().getAbsolutePath()))) + "." + targetSuffix);
 		
@@ -177,6 +178,7 @@ public class CLIConversionStrategy implements ConversionStrategy{
 	/* (non-Javadoc)
 	 * @see de.uzk.hki.da.convert.ConversionStrategy#setParam(java.lang.String)
 	 */
+	@Override
 	public
 	void setParam(String param) {
 		this.commandLine=param;

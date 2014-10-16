@@ -36,9 +36,9 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import de.uzk.hki.da.core.Path;
 import de.uzk.hki.da.model.Node;
 import de.uzk.hki.da.model.StoragePolicy;
-import de.uzk.hki.da.utils.Path;
 
 
 /**
@@ -104,7 +104,6 @@ public class IrodsGridFacadeTest {
 		node.setGridCacheAreaRootPath(Path.make(irodsDir));
 		node.setWorkAreaRootPath(Path.make(forkDir));
 		node.setReplDestinations("lvr");
-		node.setAdminEmail("test@test.de");
 		ig.setLocalNode(node);
 		when(isc.getZone()).thenReturn("da-nrw");
 		sp = new StoragePolicy(node);
@@ -148,7 +147,7 @@ public class IrodsGridFacadeTest {
 		when ( isc.executeRule( anyString(), anyString()) )
 		.thenReturn( "1" );
 		
-		when ( isc.fileExists((String)anyString())). thenReturn(true);
+		when ( isc.fileExists(anyString())). thenReturn(true);
 		
 		assertEquals(true,ig.put(temp, "123456/urn.tar", sp));
 		assertEquals(true, new File(irodsDir+ "/aip/123456/urn.tar").exists());

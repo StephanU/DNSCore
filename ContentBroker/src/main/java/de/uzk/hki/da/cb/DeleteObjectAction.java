@@ -25,8 +25,10 @@ import java.io.IOException;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang.NotImplementedException;
 
+import de.uzk.hki.da.action.AbstractAction;
+import de.uzk.hki.da.core.ConfigurationException;
+import de.uzk.hki.da.core.Path;
 import de.uzk.hki.da.core.UserException;
-import de.uzk.hki.da.utils.Path;
 
 /**
  * For a given object 
@@ -37,7 +39,17 @@ import de.uzk.hki.da.utils.Path;
 public class DeleteObjectAction extends AbstractAction {
 
 	@Override
-	boolean implementation() throws FileNotFoundException, IOException,
+	public void checkActionSpecificConfiguration() throws ConfigurationException {
+		// Auto-generated method stub
+	}
+
+	@Override
+	public void checkSystemStatePreconditions() throws IllegalStateException {
+		// Auto-generated method stub
+	}
+
+	@Override
+	public boolean implementation() throws FileNotFoundException, IOException,
 			UserException {
 
 		if (object.getPackages().size()==1){
@@ -73,7 +85,7 @@ public class DeleteObjectAction extends AbstractAction {
 	}
 
 	@Override
-	void rollback() throws Exception {
+	public void rollback() throws Exception {
 		throw new NotImplementedException("No rollback implemented for this action");
 	}
 

@@ -22,24 +22,28 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
-import java.util.Collection;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
 import org.apache.commons.io.FileUtils;
-import org.apache.commons.io.filefilter.IOFileFilter;
-import org.apache.commons.io.filefilter.TrueFileFilter;
 import org.apache.commons.lang.NotImplementedException;
+import org.hibernate.Session;
 
+import de.uzk.hki.da.action.AbstractAction;
+import de.uzk.hki.da.core.C;
 import de.uzk.hki.da.core.ConfigurationException;
+import de.uzk.hki.da.core.HibernateUtil;
 import de.uzk.hki.da.core.IngestGate;
+import de.uzk.hki.da.core.Path;
 import de.uzk.hki.da.core.UserException;
-import de.uzk.hki.da.format.FormatScanService;
+import de.uzk.hki.da.ff.FileFormatException;
+import de.uzk.hki.da.ff.FileFormatFacade;
+import de.uzk.hki.da.ff.IFileWithFileFormat;
+import de.uzk.hki.da.ff.ISubformatIdentificationPolicy;
 import de.uzk.hki.da.grid.GridFacade;
-import de.uzk.hki.da.model.DAFile;
+import de.uzk.hki.da.model.SecondStageScanPolicy;
 import de.uzk.hki.da.repository.RepositoryException;
-import de.uzk.hki.da.service.RetrievePackagesHelper;
-import de.uzk.hki.da.utils.Path;
 
 /**
  * <li>Creates a new Representation and copies the contents of the submission into it.
@@ -51,30 +55,33 @@ import de.uzk.hki.da.utils.Path;
  */
 public class RestructureAction extends AbstractAction{
 	
-	private String sidecarExtensions="";	
-	private FormatScanService formatScanService;
+	private FileFormatFacade fileFormatFacade;
 	private IngestGate ingestGate;
-	private List<IOFileFilter> unwantedFilesFilters;
 	private GridFacade gridRoot;
 	
+	public RestructureAction(){
+		SUPPRESS_OBJECT_CONSISTENCY_CHECK = true;
+	}
+	
 	@Override
-	boolean implementation() throws FileNotFoundException, IOException,
-			UserException, RepositoryException {
+	public void checkActionSpecificConfiguration() throws ConfigurationException {
 		if (getGridRoot()==null) throw new ConfigurationException("gridRoot not set");
-		if (getFormatScanService()==null) throw new ConfigurationException("formatScanService not set");
+		if (getFileFormatFacade()==null) throw new ConfigurationException("fileFormatFacade not set");
+	}
+
+	@Override
+	public void checkSystemStatePreconditions() throws IllegalStateException {
+		// Auto-generated method stub
+	}
+
+	@Override
+	public boolean implementation() throws FileNotFoundException, IOException,
+			UserException, RepositoryException {
 		
-		deleteUnwantedFiles(object.getPath().toFile()); // unwanted content can be configured in beans-actions.xml
-		
-		String repName;
-		try {
-			repName = transduceDateFolderContentsToNewRep(object.getPath().toString());
-		} catch (IOException e) {		
-			throw new RuntimeException("problems during creating new representation",e);
-		}
-		object.getLatestPackage().scanRepRecursively(repName+"a");
-		logger.debug("REPNAME: " + repName);
-		job.setRep_name(repName);
-		
+		FileUtils.moveDirectory(object.getDataPath().toFile(), 
+				new File(object.getPath()+"/sipData"));
+		object.getDataPath().toFile().mkdirs();
+
 		if (object.isDelta()) {
 			
 			RetrievePackagesHelper retrievePackagesHelper = new RetrievePackagesHelper(getGridRoot());
@@ -88,13 +95,12 @@ public class RestructureAction extends AbstractAction{
 				throw new RuntimeException("Failed to determine object size for object " + object.getIdentifier(), e);
 			}
 			
-			object.getDataPath().toFile().mkdirs();
 			logger.info("object already exists. Moving existing packages to work area.");
 			try {
 				retrievePackagesHelper.loadPackages(object, false);
 				logger.info("Packages of object \""+object.getIdentifier()+
 						"\" are now available on cache resource at: " + Path.make(object.getPath(),"existingAIPs"));
-				FileUtils.copyFile(Path.makeFile(object.getDataPath(),object.getNameOfNewestBRep(),"premis.xml"),
+				FileUtils.copyFile(Path.makeFile(object.getPath("newest"),"premis.xml"),
 						Path.makeFile(object.getDataPath(),"premis_old.xml"));
 			} catch (IOException e) {
 				throw new RuntimeException("error while trying to get existing packages from lza area",e);
@@ -102,42 +108,56 @@ public class RestructureAction extends AbstractAction{
 		}
 		
 		
+		String repName;
+		try {
+			repName = transduceDateFolderContentsToNewRep(object.getPath().toString());
+		} catch (IOException e) {		
+			throw new RuntimeException("problems during creating new representation",e);
+		}
+		object.getLatestPackage().scanRepRecursively(repName+"a");
+		job.setRep_name(repName);
+
+		
 		object.reattach();
 		logger.debug("scanning files with format identifier(s)");
-		List<DAFile> scannedFiles = formatScanService.identify(object.getNewestFilesFromAllRepresentations(sidecarExtensions));
-		for (DAFile f:scannedFiles){
+		Session session = HibernateUtil.openSession();
+		List<SecondStageScanPolicy> policies = 
+				preservationSystem.getSubformatIdentificationPolicies();
+		session.close();
+
+
+		List<ISubformatIdentificationPolicy> polys = new ArrayList<ISubformatIdentificationPolicy>();
+		for (SecondStageScanPolicy s:policies)
+			polys.add((ISubformatIdentificationPolicy) s);
+		getFileFormatFacade().setSubformatIdentificationPolicies(polys);
+
+
+		
+		List<IFileWithFileFormat> scannedFiles = null;
+		try {
+			scannedFiles = fileFormatFacade.identify(object.getNewestFilesFromAllRepresentations(preservationSystem.getSidecarExtensions()));
+		} catch (FileFormatException e) {
+			throw new RuntimeException(C.ERROR_MSG_DURING_FILE_FORMAT_IDENTIFICATION,e);
+		}
+		for (IFileWithFileFormat f:scannedFiles){
 			logger.debug(f+":"+f.getFormatPUID());
 		}
+
+		
+		
+		
+		logger.debug("Create new b representation "+repName+"b");
+		Path.makeFile(object.getDataPath(), repName+"b").mkdir();
+
+		Path.makeFile(object.getDataPath(),"jhove_temp").mkdirs();
 		return true;
 	}
 
 	@Override
-	void rollback() throws Exception {
+	public void rollback() throws Exception {
 		throw new NotImplementedException("rollback for this action not implemented yet");
 	}
 
-	
-	
-	public void deleteUnwantedFiles(File pkg) {
-
-		if(unwantedFilesFilters == null || unwantedFilesFilters.isEmpty()) {
-			logger.warn("unwantedFilesFilters is not set. No cleanup will be performed after unpacking.");
-			return;
-		}
-
-		for (IOFileFilter filter : unwantedFilesFilters) {
-			
-			Collection<File> files = FileUtils.listFilesAndDirs(pkg, filter, TrueFileFilter.INSTANCE);
-			for (File file : files) {
-				if( filter.accept(file)) {
-					logger.warn("deleted unwanted file: {}", file.getAbsolutePath());
-					FileUtils.deleteQuietly(file);
-				}
-			}
-		}
-
-	}
-	
 	
 	
 	/**
@@ -157,11 +177,9 @@ public class RestructureAction extends AbstractAction{
 	    SimpleDateFormat ft = new SimpleDateFormat ("yyyy'_'MM'_'dd'+'HH'_'mm'+'");
 	    String repName = ft.format(dNow);
 	    
-		FileUtils.moveDirectory(new File(physicalPathToAIP+"/data"), 
-				new File(physicalPathToAIP+"/temp"));
+		
 	
-	    new File(physicalPathToAIP+"/data").mkdir();
-	    FileUtils.moveDirectory(new File(physicalPathToAIP+"/temp"), 
+	    FileUtils.moveDirectory(new File(physicalPathToAIP+"/sipData"), 
 	    		new File(physicalPathToAIP+"/data/"+repName+"a"));
 	    
 	    return repName;
@@ -183,33 +201,11 @@ public class RestructureAction extends AbstractAction{
 		this.gridRoot = gridRoot;
 	}
 	
-	public List<IOFileFilter> getUnwantedFilesFilters() {
-		return unwantedFilesFilters;
-	}
-		
-	/**
-	 * Sets a list of unix-like patterns which denote files and directories
-	 * that will be deleted after unpacking the SIP.
-	 * Allowed wildcards are "*" and "?".
-	 * @param unwantedFiles
-	 */
-	public void setUnwantedFilesFilters(List<IOFileFilter> unwantedFilesFilters) {
-		this.unwantedFilesFilters = unwantedFilesFilters;
+	public FileFormatFacade getFileFormatFacade() {
+		return fileFormatFacade;
 	}
 
-	public FormatScanService getFormatScanService() {
-		return formatScanService;
-	}
-
-	public void setFormatScanService(FormatScanService formatScanService) {
-		this.formatScanService = formatScanService;
-	}
-
-	public String getSidecarExtensions() {
-		return sidecarExtensions;
-	}
-
-	public void setSidecarExtensions(String sidecarExtensions) {
-		this.sidecarExtensions = sidecarExtensions;
+	public void setFileFormatFacade(FileFormatFacade fileFormatFacade) {
+		this.fileFormatFacade = fileFormatFacade;
 	}
 }

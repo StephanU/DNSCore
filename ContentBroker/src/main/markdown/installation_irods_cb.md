@@ -1,4 +1,22 @@
 # Connecting iRODS and DNSCore
+	/*
+	  DA-NRW Software Suite | ContentBroker
+	  Copyright (C) 2014 LVRInfoKom
+	  Landschaftsverband Rheinland
+	
+	  This program is free software: you can redistribute it and/or modify
+	  it under the terms of the GNU General Public License as published by
+	  the Free Software Foundation, either version 3 of the License, or
+	  (at your option) any later version.
+	
+	  This program is distributed in the hope that it will be useful,
+	  but WITHOUT ANY WARRANTY; without even the implied warranty of
+	  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	  GNU General Public License for more details.
+	
+	  You should have received a copy of the GNU General Public License
+	  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+	*/
 
 ## Prerequisites
 
@@ -6,14 +24,15 @@
 * DNSCore specific iRODS configuration ([here](installation_irods.md))
 * ContentBroker ([here](https://github.com/da-nrw/DNSCore/blob/master/ContentBroker/src/main/markdown/installation_cb.md))
 
-
-
 This document describes how to set up iRODS as a backend to an existing DNSCore installation.
-Both systems connected, with the DNSCore beeing the business layer and iRODS beeing the storage layer,
+Both systems connected, with the DNSCore being the business layer and iRODS being the storage layer,
 form a fully operational node ready for production use. For the purpose of this document, the system is considered
-as consisting only of this node, e.g. you can see it as a how to of setting up the master node of a system. For setup of
-slave nodes or a consideration of other topologies (federation) see the notes at the bottom of this document.
+as consisting only of this node, e.g. you can see it as a how to of setting up the master node of a system. 
 
+DNSCore supports two topologies of working with iRODS DataGrids. The more integrated "classic" implementation and the 
+more seperated "federated" mode. This depends on your desired use case. To read more about the as well supported "federated mode" 
+please refer to the iRODS federated mode documentation
+([here](https://github.com/da-nrw/DNSCore/blob/master/ContentBroker/src/main/markdown/administration_federated.md))
 
     [irodsuser] - The irods user we will use to let the ContentBroker talk to the iRODS server.
     [irodspassword] - The password of this user.
@@ -76,7 +95,6 @@ For the distributedConversion mode this setting is needed:
     
 For the long term archive mode, these settings are needed:
 
-    cb.min_repls=1
     localNode.replDestinations=[nameOfYourArchiveResourceGroup]
     
 These settings mean that the ContentBroker will replicate the AIPs to exactly one resource location which
@@ -137,16 +155,14 @@ Please add the entry on all connected servers by changing line
 
     reRuleSet   contentbroker,core
 
-And store the corresponding file [danrw.re](https://raw.githubusercontent.com/da-nrw/DNSCore/master/ContentBroker/src/main/rules/danrw.re) as:
-
-    iRODS/server/config/reConfigs/contentbroker.re
+And store the corresponding file [dns.re integrated one zone ](https://raw.githubusercontent.com/da-nrw/DNSCore/master/ContentBroker/src/main/rules/irodsGridFacade/dns.re) 
+ or [dns.re federated many zones](https://raw.githubusercontent.com/da-nrw/DNSCore/master/ContentBroker/src/main/rules/irodsFederatedGridFacade/dns.re)
+ 
+    iRODS/server/config/reConfigs/dns.re
 
 The file contentbroker.re must be changed to your local appropiate settings. 
 
     acDataDeletePolicy {ON($rescName == "") {msiDeleteDisallowed; }}         -- 
-    acGetReplDests(*replDests) { replDests=""; }                             --
-    acGetMyNode(*myNode,*myServer){ *myNode =""; *myServer ="" }             --
-    acGetNodeAdmin(*email){ *email = "" }                                    --
 
 Restart the iRODS server and check if it runs properly by typing in 
 
@@ -157,17 +173,15 @@ In case there is somethin wrong it will return a RE_PARSER_ERROR.
 Please refer carefully to the iRODS Documentation
 about needed change of other parameters, as wrong parameters could serverly harm your DNS system! There is no test if a ruleBase is operating well, while this file being parsed on demand whenever actions being fired. There are many more actions being neccessary or at least interesting to implement, please consider reading the documentation in these files as well. 
 
- In case you're running the resource server mode, the resource names are your repl_destinations names in config.properties. In case of forming a federation, zone_names are listed in repl_destinations. 
+ In case you're running the resource server mode, the resource names are your repl_destinations names in config.properties.  
 
 Please note the settings of your iRODS installation, as they're needed for config.properties of CB and DA-Web.
 
-1. danrw.re file Template: https://github.com/da-nrw/DNSCore/blob/master/ContentBroker/src/main/rules/danrw.re
+1. dns.re file Template: [dns.re integrated one zone ](https://raw.githubusercontent.com/da-nrw/DNSCore/master/ContentBroker/src/main/rules/irodsGridFacade/dns.re) 
+ or [dns.re federated many zones](https://raw.githubusercontent.com/da-nrw/DNSCore/master/ContentBroker/src/main/rules/irodsFederatedGridFacade/dns.re)
 
 Alter "default resource" settings in core.re and in danrw.re for apropiate settings on your system as they might point
-to some dummy resources. 
-
-
-## TODO other stuff
+to some dummy resourcees.
 
 ### Adding users to DNSCore
 
@@ -197,5 +211,5 @@ Other ports such as
     80
     443
     
-could be openend as you might need them, but hey might depend on your setup. Please disable all running desktop firewalls (e.g. iptables) on your server as they may cause problems.  
+could be opened as you might need them, but hey might depend on your setup. Please disable all running desktop firewalls (e.g. iptables) on your server as they may cause problems.  
 

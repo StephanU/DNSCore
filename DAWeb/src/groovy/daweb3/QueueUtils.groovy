@@ -41,13 +41,13 @@ class QueueUtils {
 	 * @author Daniel M. de Oliveira
 	 *
 	 */
-	String createJob( daweb3.Object object, status, responsibleNodeName) {
+	String createJob( daweb3.Object object, status, responsibleNodeName, additionalQuestion) {
 		if (object == null) throw new IllegalArgumentException ( "Object is not valid" )
 		if (responsibleNodeName == null) throw new IllegalArgumentException("responsibleNodeName must not be null")
 		object.object_state = 50
 
-		log.debug "object.contractor.shortName: " + object.contractor.shortName
-		log.debug "session.contractor.shortName: " + object.contractor.shortName
+		log.debug "object.user.shortName: " + object.user.shortName
+		log.debug "session.user.shortName: " + object.user.shortName
 		
 		def list = QueueEntry.findByObjAndStatus(object, status)
 		if (list != null) throw new RuntimeException ("Bereits angefordert.");
@@ -55,6 +55,8 @@ class QueueUtils {
 		def job = new QueueEntry()
 		job.status = status
 		job.setObj(object);
+		if (additionalQuestion!=null || additionalQuestion!= "")
+		job.setQuestion(additionalQuestion)
 		job.created = Math.round(new Date().getTime()/1000L)
 		job.modified = Math.round(new Date().getTime()/1000L)
 		
@@ -74,5 +76,41 @@ class QueueUtils {
 			throw new Exception(errorMsg)
 		}
 	}
+	String createJob( daweb3.Object object, status, responsibleNodeName) {
+		return createJob(object,status,responsibleNodeName, "" )
+		
+	}
+	/**
+	 * Modifies a job and sets it to new Workflow state
+	 * @param id 
+	 * @param status
+	 * @author Jens Peters
+	 */
+	String modifyJob (String id, newStatus, String additionalAnswer) {
+		def queueEntryInstance = QueueEntry.get(id)
+		if (queueEntryInstance) {
+			def status = queueEntryInstance.getStatus()
+			int state = newStatus.toInteger();
+			if (additionalAnswer!=null && additionalAnswer!="")
+			queueEntryInstance.answer = additionalAnswer
+			queueEntryInstance.status = newStatus
+			queueEntryInstance.modified = Math.round(new Date().getTime()/1000L)
+			def errorMsg = ""
+			if( !queueEntryInstance.save()  ) {
+				queueEntryInstance.errors.each { 
+					errorMsg += it 
+					log.error(it)
+				}
+				throw new Exception(errorMsg)
+			}
+			return "Paket "+ id +"  in Status: " + newStatus + " " + additionalAnswer 
+		} else return "Paket nicht gefunden!"
+	}
+	
+	String modifyJob (String id, newStatus) {
+		return modifyJob (id, newStatus, "") 
+	
+	}
+		
 
 }

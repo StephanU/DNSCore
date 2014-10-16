@@ -33,16 +33,16 @@ import org.junit.Test;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
+import de.uzk.hki.da.core.Path;
+import de.uzk.hki.da.core.RelativePath;
 import de.uzk.hki.da.format.PdfConversionStrategy;
 import de.uzk.hki.da.model.ConversionInstruction;
 import de.uzk.hki.da.model.ConversionRoutine;
 import de.uzk.hki.da.model.DAFile;
 import de.uzk.hki.da.model.Object;
-import de.uzk.hki.da.utils.Path;
-import de.uzk.hki.da.utils.RelativePath;
+import de.uzk.hki.da.test.TC;
+import de.uzk.hki.da.test.TESTHelper;
 import de.uzk.hki.da.utils.SimplifiedCommandLineConnector;
-import de.uzk.hki.da.utils.TESTHelper;
-import de.uzk.hki.da.utils.TC;
 
 
 /**
@@ -67,7 +67,7 @@ public class PdfConversionStrategyTest {
 	public void setUp(){
 		
 		o = TESTHelper.setUpObject("1", new RelativePath(workAreaRootPath));
-		
+		o.getLatestPackage().getFiles().add(new DAFile(o.getLatestPackage(),"rep+a","Pdf.pdf"));
 		cs.setObject(o);
 	}
 	
@@ -86,6 +86,7 @@ public class PdfConversionStrategyTest {
 		SimplifiedCommandLineConnector cli = mock ( SimplifiedCommandLineConnector.class );
 					
 		when(cli.execute((String[]) anyObject())).thenAnswer(new Answer () {
+			@Override
 			public Boolean answer(InvocationOnMock invocation) {
 			    java.lang.Object[] args = invocation.getArguments();
 		         String[] cmdarr = (String[]) args[0];

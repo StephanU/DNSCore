@@ -30,10 +30,11 @@ import java.util.List;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang.NotImplementedException;
 
+import de.uzk.hki.da.action.AbstractAction;
 import de.uzk.hki.da.core.ConfigurationException;
+import de.uzk.hki.da.core.Path;
 import de.uzk.hki.da.grid.GridFacade;
 import de.uzk.hki.da.model.StoragePolicy;
-import de.uzk.hki.da.utils.Path;
 
 /**
  * Does the decoupled and time based Archive Replication to the given minimum number of required nodes. 
@@ -41,22 +42,35 @@ import de.uzk.hki.da.utils.Path;
  */
 public class ArchiveReplicationAction extends AbstractAction {
 	
-	public ArchiveReplicationAction(){}
+	public ArchiveReplicationAction(){SUPPRESS_OBJECT_CONSISTENCY_CHECK=true;}
 	
 	private GridFacade gridRoot;
 	
 	@Override
+	public void checkActionSpecificConfiguration() throws ConfigurationException {
+		if (gridRoot==null) throw new ConfigurationException("gridRoot not set");
+	}
+
+	@Override
+	public void checkSystemStatePreconditions() throws IllegalStateException {
+		// Auto-generated method stub
+	}
+
+	@Override
 	public
 	boolean implementation() {
-		if (gridRoot==null) throw new ConfigurationException("gridRoot not set");
 		
 		String filename = object.getIdentifier() + ".pack_" + object.getLatestPackage().getName() + ".tar";
 		Path target = Path.make(object.getContractor().getShort_name(), object.getIdentifier(), filename);
 		StoragePolicy sp = new StoragePolicy(localNode);
+		sp.setMinNodes(preservationSystem.getMinRepls());
 		sp.setDestinations(new ArrayList<String>(getDestinations()));
-		
-		// TODO: this is a user/system exception!!
-		if (!sp.isPolicyAchievable()) throw new RuntimeException ("POLICY is not achievable! More forbidden nodens then required minimal copies!");
+		sp.setForbiddenNodes(object.getContractor().getForbidden_nodes());
+		// TODO: this is a user/system exception!! commented out due to federation
+		if (!sp.isPolicyAchievable()) {
+			logger.warn("STORAGE POLICY not achievable!!");
+			//throw new RuntimeException ("POLICY is not achievable!!");
+		}
 		
 		try {
 			Path newFilePath = Path.make(localNode.getWorkAreaRootPath(), "work", object.getContractor().getShort_name(), filename);
@@ -71,6 +85,11 @@ public class ArchiveReplicationAction extends AbstractAction {
 		return true;
 	}
 	
+	@Override
+	public void rollback() {
+		throw new NotImplementedException("No rollback implemented for this action");
+	}
+
 	/**
 	 * @author Jens Peters
 	 * @author Daniel M. de Oliveira
@@ -90,11 +109,6 @@ public class ArchiveReplicationAction extends AbstractAction {
 	}
 	
 	
-	@Override
-	void rollback() {
-		throw new NotImplementedException("No rollback implemented for this action");
-	}
-
 	public GridFacade getGridRoot() {
 		return gridRoot;
 	}

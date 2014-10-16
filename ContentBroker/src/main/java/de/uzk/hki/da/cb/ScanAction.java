@@ -25,61 +25,79 @@ import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
+import de.uzk.hki.da.action.AbstractAction;
+import de.uzk.hki.da.core.C;
 import de.uzk.hki.da.core.ConfigurationException;
 import de.uzk.hki.da.core.UserException;
 import de.uzk.hki.da.core.UserException.UserExceptionId;
 import de.uzk.hki.da.grid.DistributedConversionAdapter;
-import de.uzk.hki.da.metadata.PremisXmlReader;
 import de.uzk.hki.da.model.ConversionInstruction;
 import de.uzk.hki.da.model.ConversionInstructionBuilder;
 import de.uzk.hki.da.model.ConversionPolicy;
 import de.uzk.hki.da.model.DAFile;
 import de.uzk.hki.da.model.Object;
-import de.uzk.hki.da.model.PreservationSystem;
+import de.uzk.hki.da.model.ObjectPremisXmlReader;
+import de.uzk.hki.da.service.MailContents;
 
 
 /**
  * Scans the files and builds ConversionInstructions for them if MIGRATION right is granted.
- * Populates the files collection of the jobs package with entries for each file of rep+a.
- * Scans the files of rep+a and attaches format info to them.
- * 
- * As a side effect this action not only counts up its own Jobs state up so that
- * the following ConvertAction is triggered but also creates Jobs for collections
- * of ConversionInstructions which can't be done on the local node due to the lack
- * of the necessary ConversionRoutines.
+ * If the MIGRATION right is not granted, sets the jobs state to ProcessUserDecisionsAction so that
+ * the user can decide how to procede further 
  * 
  * @author Daniel M. de Oliveira
  */
 public class ScanAction extends AbstractAction{
 	
-	static final Logger logger = LoggerFactory.getLogger(ScanAction.class);
-	private PreservationSystem preservationSystem;
+	private static final String MIGRATION = "MIGRATION";
 	private final ConversionInstructionBuilder ciB = new ConversionInstructionBuilder();
 	private DistributedConversionAdapter distributedConversionAdapter;
 	
 	@Override
-	boolean implementation() throws IOException {
+	public void checkActionSpecificConfiguration() throws ConfigurationException {
 		if (distributedConversionAdapter==null) throw new ConfigurationException("distributedConversionAdapter not set");
-		if (preservationSystem==null) // So we can prevent the preservationSystem to be instantiated in unit tests.
-			preservationSystem = new PreservationSystem(dao);
+	}
+
+	@Override
+	public void checkSystemStatePreconditions() throws IllegalStateException {
+		// Auto-generated method stub
+	}
+
+	@Override
+	public boolean implementation() throws IOException {
 		
-		String repPath = object.getDataPath() +"/"+ job.getRep_name();
-		Object premisObject = parsePremisToMetadata(repPath+"a");
+		job.getConversion_instructions().addAll(
+				generateConversionInstructions(object.getLatestPackage().getFiles()));
 		
-		if (premisObject.grantsRight("MIGRATION"))
+		Object premisObject = parsePremisToMetadata(object.getDataPath() +"/"+ job.getRep_name()+"a");
+		if (!premisObject.grantsRight(MIGRATION))
 		{
-			List<ConversionInstruction> cisArch = generateConversionInstructions(object.getLatestPackage().getFiles());
-			job.getConversion_instructions().addAll(cisArch);
+			logger.info("PREMIS says migration is not granted. Will ask the user what to do next.");
+			new MailContents(preservationSystem,localNode).informUserAboutPendingDecision(object); 
+			
+			// "Manipulate" the end status to point to ProcessUserDecisionsAction
+			job.setQuestion(C.QUESTION_MIGRATION_ALLOWED);
+			this.setEndStatus(C.WORKFLOW_STATUS_WAIT___PROCESS_FOR_USER_DECISION_ACTION);
 		}
-		else
-			logger.info("No migration rights granted. No files will be converted for archival storage.");
-		
 		return true;
 	}
 
+	
+	
+	
+	@Override
+	public void rollback() {
+	
+		job.getConversion_instructions().clear();
+		for (ConversionInstruction ci: job.getConversion_instructions()){
+			logger.warn("still exists: "+ci);
+		}
+		
+	}
+
+	
+	
+	
 	/**
 	 * @author Daniel M. de Oliveira
 	 * @param filesArchival
@@ -89,39 +107,29 @@ public class ScanAction extends AbstractAction{
 		List<ConversionInstruction> cis = new ArrayList<ConversionInstruction>();
 		
 		for (DAFile file : filesArchival){
-			
-			for	(ConversionPolicy p:
-				preservationSystem.getApplicablePolicies(file, "DEFAULT"))
-			{
-				logger.info("Found applicable Policy for FileFormat "+
-						p.getSource_format()+" -> "+p.getConversion_routine().getName() + "("+ file.getRelative_path()+ ")");
-				
-				ConversionInstruction ci = ciB.assembleConversionInstruction(file, p);
-				ci.setSource_file(file);
-				cis.add(ci);
-				
-				logger.info("Built conversionInstructionForArchival: "+ci.toString());
+			logger.debug("File: "+file.getRelative_path());
+			if(file.getRelative_path().equals("XMP.rdf")) {
+				logger.debug("Skipping rdf file");
+			} else {
+				for	(ConversionPolicy p:
+					preservationSystem.getApplicablePolicies(file, false))
+					{
+					logger.info("Found applicable Policy for FileFormat "+
+							p.getSource_format()+" -> "+p.getConversion_routine().getName() + "("+ file.getRelative_path()+ ")");
+					
+					ConversionInstruction ci = ciB.assembleConversionInstruction(file, p);
+					logger.debug("Set source file "+file.getRelative_path());
+					ci.setSource_file(file);
+					cis.add(ci);
+					
+					logger.info("Built conversionInstructionForArchival: "+ci.toString());
+				}
 			}
 		}
 		
 		return cis;
 	}
 	
-	
-
-	
-	
-	
-	
-	
-	/**
-	 * this is just for testing purposes
-	 * @param sys
-	 */
-	void setPreservationSystem(PreservationSystem sys){
-		preservationSystem = sys;
-	}
-
 	
 	
 	
@@ -130,7 +138,7 @@ public class ScanAction extends AbstractAction{
 		Object o = null;
 				
 		try {
-			o = new PremisXmlReader()
+			o = new ObjectPremisXmlReader()
 			.deserialize(new File(pathToRepresentation + "/premis.xml"));
 		} catch (ParseException e1) {
 			throw new UserException(UserExceptionId.READ_SIP_PREMIS_ERROR, "Error while parsing premis file", e1);
@@ -141,21 +149,15 @@ public class ScanAction extends AbstractAction{
 		return o;
 	}
 	
-	@Override
-	void rollback() {
-
-		job.getConversion_instructions().clear();
-		for (ConversionInstruction ci: job.getConversion_instructions()){
-			logger.warn("still exists: "+ci);
-		}
-		
-	}
-
-
+	
+	
+	
 	public DistributedConversionAdapter getDistributedConversionAdapter() {
 		return distributedConversionAdapter;
 	}
 
+	
+	
 
 	public void setDistributedConversionAdapter(
 			DistributedConversionAdapter distributedConversionAdapter) {

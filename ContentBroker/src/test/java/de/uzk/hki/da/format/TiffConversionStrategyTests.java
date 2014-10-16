@@ -29,16 +29,16 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import de.uzk.hki.da.core.C;
+import de.uzk.hki.da.core.Path;
+import de.uzk.hki.da.core.RelativePath;
 import de.uzk.hki.da.format.TiffConversionStrategy;
 import de.uzk.hki.da.model.ConversionInstruction;
 import de.uzk.hki.da.model.ConversionRoutine;
 import de.uzk.hki.da.model.DAFile;
 import de.uzk.hki.da.model.Object;
-import de.uzk.hki.da.utils.C;
-import de.uzk.hki.da.utils.Path;
-import de.uzk.hki.da.utils.RelativePath;
-import de.uzk.hki.da.utils.TESTHelper;
-import de.uzk.hki.da.utils.TC;
+import de.uzk.hki.da.test.TC;
+import de.uzk.hki.da.test.TESTHelper;
 
 
 /**
@@ -61,6 +61,10 @@ public class TiffConversionStrategyTests {
 		o = TESTHelper.setUpObject("1", new RelativePath(workAreaRootPath));
 		cs.setObject(o);
 		o.reattach();
+		DAFile f = new DAFile(o.getLatestPackage(),"rep+b","CCITT_1.TIF");
+		DAFile f2 = new DAFile(o.getLatestPackage(),"rep+b","CCITT_1.UNCOMPRESSED.TIF");
+		o.getLatestPackage().getFiles().add(f);
+		o.getLatestPackage().getFiles().add(f2);
 		Path.makeFile(contractorFolder,"1/data","rep+b").mkdirs();
 	}
 

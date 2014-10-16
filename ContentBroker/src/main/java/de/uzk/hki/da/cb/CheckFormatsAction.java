@@ -19,6 +19,7 @@
 
 package de.uzk.hki.da.cb;
 
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -26,43 +27,86 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.lang.NotImplementedException;
+import org.hibernate.Session;
 
-import de.uzk.hki.da.format.FormatScanService;
-import de.uzk.hki.da.format.JhoveScanService;
+import de.uzk.hki.da.action.AbstractAction;
+import de.uzk.hki.da.core.C;
+import de.uzk.hki.da.core.ConfigurationException;
+import de.uzk.hki.da.core.HibernateUtil;
+import de.uzk.hki.da.core.Path;
+import de.uzk.hki.da.ff.FileFormatException;
+import de.uzk.hki.da.ff.FileFormatFacade;
+import de.uzk.hki.da.ff.IFileWithFileFormat;
+import de.uzk.hki.da.ff.ISubformatIdentificationPolicy;
 import de.uzk.hki.da.model.DAFile;
 import de.uzk.hki.da.model.Package;
+import de.uzk.hki.da.model.SecondStageScanPolicy;
 import de.uzk.hki.da.utils.CommaSeparatedList;
 
 /**
+ * Creates metadata files from extracted jhove output and puts them to the folder jhove_temp
+ * below the objects data folder, which can be used in following actions. 
+ * The metadata files are named by a md5 hash.
+ * <br><br>
+ * Example:
+ * <ul>
+ * <li>File: WorkAreaRootPath/work/csn/oid/data/repname/sub/a.jpg
+ * <li>Jhove: WorkAreaRootPath/work/csn/oid/data/jhove_temp/repname/md5hashed(sub/a.jpg)
+ * </ul>
+ * 
  * @author Daniel M. de Oliveira
  */
 public class CheckFormatsAction extends AbstractAction {
 
 
-	private String sidecarExtensions;
+	private FileFormatFacade fileFormatFacade;
 
-	private FormatScanService formatScanService;
-
-	private JhoveScanService jhoveScanService;
 
 	@Override
-	boolean implementation() throws FileNotFoundException, IOException {
+	public void checkActionSpecificConfiguration() throws ConfigurationException {
+		// Auto-generated method stub
+	}
+
+	@Override
+	public void checkSystemStatePreconditions() throws IllegalStateException {
+		// Auto-generated method stub
 		
-		List<DAFile> allFiles = new ArrayList<DAFile>();
+	}
+
+	@Override
+	public boolean implementation() throws FileNotFoundException, IOException {
+		
+		List<IFileWithFileFormat> allFiles = new ArrayList<IFileWithFileFormat>();
+		List<DAFile> allDAFiles = new ArrayList<DAFile>();
 		for (Package p:object.getPackages()){
 				allFiles.addAll(p.getFiles());
-				
+				allDAFiles.addAll(p.getFiles());
 		}
-		allFiles = getFormatScanService().identify(allFiles);
 		
-		for (DAFile f:allFiles){
+		Session session = HibernateUtil.openSession();
+		List<SecondStageScanPolicy> policies = 
+				preservationSystem.getSubformatIdentificationPolicies();
+		session.close();
+		
+		List<ISubformatIdentificationPolicy> polys = new ArrayList<ISubformatIdentificationPolicy>();
+		for (SecondStageScanPolicy s:policies)
+			polys.add((ISubformatIdentificationPolicy) s);
+		getFileFormatFacade().setSubformatIdentificationPolicies(polys);
+
+		try {
+			allFiles = getFileFormatFacade().identify(allFiles);
+		} catch (FileFormatException e) {
+			throw new RuntimeException(C.ERROR_MSG_DURING_FILE_FORMAT_IDENTIFICATION,e);
+		}
+		
+		for (IFileWithFileFormat f:allFiles){
 			if (f.getFormatPUID()==null) throw new RuntimeException("file \""+f+"\" has no format puid");
 		}
-		attachJhoveInfoToAllFiles(allFiles);
+		attachJhoveInfoToAllFiles(allDAFiles);
 		
-
-		List<DAFile> newestFiles = object.getNewestFilesFromAllRepresentations(sidecarExtensions);
+		List<DAFile> newestFiles = object.getNewestFilesFromAllRepresentations(preservationSystem.getSidecarExtensions());
 		
 		Set<String> mostRecentFormats = new HashSet<String>();
 		Set<String> mostRecentSecondaryAttributes = new HashSet<String>();
@@ -78,10 +122,15 @@ public class CheckFormatsAction extends AbstractAction {
 		object.setMost_recent_formats(new CommaSeparatedList(new ArrayList<String>(mostRecentFormats)).toString());
 		object.setMostRecentSecondaryAttributes(new CommaSeparatedList(new ArrayList<String>(mostRecentSecondaryAttributes)).toString());
 		object.setOriginal_formats(
-				new CommaSeparatedList(new ArrayList<String>(getPUIDsForAllRepAFiles(allFiles))).toString() // hack necessary again?
+				new CommaSeparatedList(new ArrayList<String>(getPUIDsForAllRepAFiles(allDAFiles))).toString() // hack necessary again?
 						);
 		
 		return true;
+	}
+
+	@Override
+	public void rollback() throws Exception {
+		throw new NotImplementedException("No rollback implemented for this action");
 	}
 
 	/**
@@ -105,40 +154,23 @@ public class CheckFormatsAction extends AbstractAction {
 	 */
 	private void attachJhoveInfoToAllFiles(List<DAFile> files) throws IOException {
 		for (DAFile f : files) {
-			String jhoveOut = jhoveScanService.extract(f.toRegularFile(), job.getId());
-
-			f.setPathToJhoveOutput(jhoveOut);
-			logger.debug("Path to jhove output for file \""+f+"\": " + jhoveOut);
+			// dir
+			String dir = Path.make(object.getDataPath(),"jhove_temp",f.getRep_name()).toString();
+			String fileName = DigestUtils.md5Hex(f.getRelative_path());
+			
+			if (!new File(dir).exists()) new File(dir).mkdirs();
+			
+			File target = Path.makeFile(dir,fileName);
+			logger.debug("will write jhove output to: "+target);
+			fileFormatFacade.extract(f.toRegularFile(), target);
 		}
 	}
 
-	@Override
-	void rollback() throws Exception {
-		throw new NotImplementedException("No rollback implemented for this action");
+	public FileFormatFacade getFileFormatFacade() {
+		return fileFormatFacade;
 	}
 
-	public FormatScanService getFormatScanService() {
-		return formatScanService;
+	public void setFileFormatFacade(FileFormatFacade fileFormatFacade) {
+		this.fileFormatFacade = fileFormatFacade;
 	}
-
-	public void setFormatScanService(FormatScanService formatScanService) {
-		this.formatScanService = formatScanService;
-	}
-
-	public JhoveScanService getJhoveScanService() {
-		return jhoveScanService;
-	}
-
-	public void setJhoveScanService(JhoveScanService jhoveScanService) {
-		this.jhoveScanService = jhoveScanService;
-	}
-
-	public void setSidecarExtensions(String sidecarExtensions) {
-		this.sidecarExtensions = sidecarExtensions;
-	}
-
-	public String getSidecarExtensions() {
-		return sidecarExtensions;
-	}
-
 }

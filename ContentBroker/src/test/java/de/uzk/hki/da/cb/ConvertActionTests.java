@@ -22,10 +22,7 @@ package de.uzk.hki.da.cb;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.Matchers.anyInt;
-import static org.mockito.Matchers.anyObject;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import java.io.File;
 import java.io.IOException;
@@ -33,23 +30,21 @@ import java.util.HashSet;
 import java.util.Set;
 
 import org.apache.commons.io.FileUtils;
-import org.hibernate.Session;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
 import de.uzk.hki.da.core.HibernateUtil;
+import de.uzk.hki.da.core.Path;
+import de.uzk.hki.da.core.RelativePath;
 import de.uzk.hki.da.grid.DistributedConversionAdapter;
-import de.uzk.hki.da.model.CentralDatabaseDAO;
 import de.uzk.hki.da.model.ConversionInstruction;
 import de.uzk.hki.da.model.ConversionRoutine;
 import de.uzk.hki.da.model.DAFile;
 import de.uzk.hki.da.model.Job;
 import de.uzk.hki.da.model.Node;
 import de.uzk.hki.da.model.Object;
-import de.uzk.hki.da.utils.Path;
-import de.uzk.hki.da.utils.RelativePath;
-import de.uzk.hki.da.utils.TESTHelper;
+import de.uzk.hki.da.test.TESTHelper;
 
 
 
@@ -95,20 +90,14 @@ public class ConvertActionTests {
 		allNodes.add(vm2);
 		allNodes.add(vm3);
 		
-		@SuppressWarnings("serial")
-		Set<Node> nodes2 = new HashSet<Node>(){{add(vm2);}};
 		ConversionRoutine im = new ConversionRoutine(
 				"IM",
-				nodes2,
 				"de.uzk.hki.da.format.CLIConversionStrategy",
 				"convert input output",
 				"png");
 		
-		@SuppressWarnings("serial")
-		Set<Node> nodes3 = new HashSet<Node>(){{add(vm3);}};
 		ConversionRoutine copy = new ConversionRoutine(
 				"COPY",
-				nodes3,
 				"de.uzk.hki.da.format.CLIConversionStrategy",
 				"cp input output",
 				"*");
@@ -140,12 +129,6 @@ public class ConvertActionTests {
 		job.getConversion_instructions().add(ci1);
 		job.getConversion_instructions().add(ci2);
 		
-		CentralDatabaseDAO dao = mock(CentralDatabaseDAO.class);
-		when (dao.getJob((Session)anyObject(),anyInt())).thenReturn(job);
-		action.setDao(dao);
-		
-		Job ret = new Job(); ret.setStatus("260");
-		when (dao.refreshJob((Job)anyObject())).thenReturn(ret);
 		
 		action.setDistributedConversionAdapter(mock(DistributedConversionAdapter.class));
 		

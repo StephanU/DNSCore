@@ -32,8 +32,6 @@ import org.jdom.Document;
 import org.jdom.JDOMException;
 import org.jdom.Namespace;
 import org.jdom.input.SAXBuilder;
-import org.junit.After;
-import org.junit.Before;
 import org.junit.Test;
 
 import de.uzk.hki.da.model.Object;
@@ -42,18 +40,10 @@ import de.uzk.hki.da.repository.RepositoryException;
 /**
  * @author Daniel M. de Oliveira
  */
-public class ATPIPGen extends Base{
+public class ATPIPGen extends AcceptanceTest{
 
-	@Before
-	public void setUp() throws IOException{
-		setUpBase();
-	}
-	
-	@After
-	public void tearDown(){
-		clearDB();
-		cleanStorage();
-	}
+	private static final String XLINK_NAMESPACE = "http://www.w3.org/1999/xlink";
+	private static final String METS_NAMESPACE = "http://www.loc.gov/METS/";
 
 	/**
 	 * @author ???
@@ -67,22 +57,21 @@ public class ATPIPGen extends Base{
 	public void testUpdateUrls() throws InterruptedException, IOException, JDOMException, RepositoryException{
 		
 		String name = "UpdateUrls";
-		createObjectAndJob("ATPIPGen"+name,"700","METS","mets.xml");
+		ath.createObjectAndJob("ATPIPGen"+name,"700","METS","mets.xml");
 
-		waitForJobsToFinish("ATPIPGen"+name, 500);
-		Object object = fetchObjectFromDB("ATPIPGen"+name);
+		ath.waitForJobsToFinish("ATPIPGen"+name);
+		Object object = ath.fetchObjectFromDB("ATPIPGen"+name);
 		
-		
-		assertNotNull(repositoryFacade.retrieveFile(object.getIdentifier(), "danrw", "_0c32b463b540e3fee433961ba5c491d6.jpg"));
-		assertNotNull(repositoryFacade.retrieveFile(object.getIdentifier(), "danrw-closed", "_0c32b463b540e3fee433961ba5c491d6.jpg"));
-		InputStream metsStreamPublic = repositoryFacade.retrieveFile(object.getIdentifier(), "danrw", "METS");
+		assertNotNull(repositoryFacade.retrieveFile(object.getIdentifier(), "collection-open", "_0c32b463b540e3fee433961ba5c491d6.jpg"));
+		assertNotNull(repositoryFacade.retrieveFile(object.getIdentifier(), "collection-closed", "_0c32b463b540e3fee433961ba5c491d6.jpg"));
+		InputStream metsStreamPublic = repositoryFacade.retrieveFile(object.getIdentifier(), "collection-open", "METS");
 		assertNotNull(metsStreamPublic);
 		assertTrue(metsStreamPublic.toString().length() > 0);
-		InputStream metsStreamClosed = repositoryFacade.retrieveFile(object.getIdentifier(), "danrw-closed", "METS");
+		InputStream metsStreamClosed = repositoryFacade.retrieveFile(object.getIdentifier(), "collection-closed", "METS");
 		assertNotNull(metsStreamClosed);
 		
-		Namespace METS_NS = Namespace.getNamespace("http://www.loc.gov/METS/");
-		Namespace XLINK_NS = Namespace.getNamespace("http://www.w3.org/1999/xlink");
+		Namespace METS_NS = Namespace.getNamespace(METS_NAMESPACE);
+		Namespace XLINK_NS = Namespace.getNamespace(XLINK_NAMESPACE);
 		
 		SAXBuilder builder = new SAXBuilder();
 		Document doc = builder.build(metsStreamPublic);
@@ -115,12 +104,12 @@ public class ATPIPGen extends Base{
 	public void testPublishInstOnly() throws InterruptedException, IOException, RepositoryException{
 		
 		String name = "InstOnly";
-		createObjectAndJob("ATPIPGen"+name,"700");
-		waitForJobsToFinish("ATPIPGen"+name, 500);
-		Object object = fetchObjectFromDB("ATPIPGen"+name);
+		ath.createObjectAndJob("ATPIPGen"+name,"700");
+		ath.waitForJobsToFinish("ATPIPGen"+name);
+		Object object = ath.fetchObjectFromDB("ATPIPGen"+name);
 		
-		assertNull(repositoryFacade.retrieveFile(object.getIdentifier(), "danrw", "_0c32b463b540e3fee433961ba5c491d6.jpg"));
-		assertNotNull(repositoryFacade.retrieveFile(object.getIdentifier(), "danrw-closed", "_0c32b463b540e3fee433961ba5c491d6.jpg"));
+		assertNull(repositoryFacade.retrieveFile(object.getIdentifier(), "collection-open", "_0c32b463b540e3fee433961ba5c491d6.jpg"));
+		assertNotNull(repositoryFacade.retrieveFile(object.getIdentifier(), "collection-closed", "_0c32b463b540e3fee433961ba5c491d6.jpg"));
 		
 	}
 	
@@ -128,11 +117,11 @@ public class ATPIPGen extends Base{
 	public void testNoPubWithLawSet() throws InterruptedException, IOException, RepositoryException{
 		
 		String name = "NoPubWithLawSet";
-		createObjectAndJob("ATPIPGen"+name,"700");
-		waitForJobsToFinish("ATPIPGen"+name, 500);
-		Object object = fetchObjectFromDB("ATPIPGen"+name);
+		ath.createObjectAndJob("ATPIPGen"+name,"700");
+		ath.waitForJobsToFinish("ATPIPGen"+name);
+		Object object = ath.fetchObjectFromDB("ATPIPGen"+name);
 		
-		assertFalse(repositoryFacade.objectExists(object.getIdentifier(), "danrw"));
+		assertFalse(repositoryFacade.objectExists(object.getIdentifier(), "collection-open"));
 		
 	}
 	
@@ -140,11 +129,11 @@ public class ATPIPGen extends Base{
 	public void testNoPubWithStartDateSet() throws InterruptedException, IOException, RepositoryException{
 		
 		String name = "NoPubWithStartDateSet";
-		createObjectAndJob("ATPIPGen"+name,"700");
-		waitForJobsToFinish("ATPIPGen"+name, 500);
-		Object object = fetchObjectFromDB("ATPIPGen"+name);
+		ath.createObjectAndJob("ATPIPGen"+name,"700");
+		ath.waitForJobsToFinish("ATPIPGen"+name);
+		Object object = ath.fetchObjectFromDB("ATPIPGen"+name);
 		
-		assertFalse(repositoryFacade.objectExists(object.getIdentifier(), "danrw"));
+		assertFalse(repositoryFacade.objectExists(object.getIdentifier(), "collection-open"));
 		
 	}
 	
@@ -153,12 +142,12 @@ public class ATPIPGen extends Base{
 	public void testPublishNothing() throws InterruptedException, IOException, RepositoryException{
 		
 		String name = "PublishNothing";
-		createObjectAndJob("ATPIPGen"+name,"700");
-		waitForJobsToFinish("ATPIPGen"+name,  500);
-		Object object = fetchObjectFromDB("ATPIPGen"+name);
+		ath.createObjectAndJob("ATPIPGen"+name,"700");
+		ath.waitForJobsToFinish("ATPIPGen"+name);
+		Object object = ath.fetchObjectFromDB("ATPIPGen"+name);
 		
-		assertFalse(repositoryFacade.objectExists(object.getIdentifier(), "danrw"));
-		assertFalse(repositoryFacade.objectExists(object.getIdentifier(), "danrw-closed"));
+		assertFalse(repositoryFacade.objectExists(object.getIdentifier(), "collection-open"));
+		assertFalse(repositoryFacade.objectExists(object.getIdentifier(), "collection-closed"));
 		
 	}
 	
@@ -166,12 +155,12 @@ public class ATPIPGen extends Base{
 	public void testPublishAll() throws InterruptedException, IOException, RepositoryException{
 		
 		String name = "AllPublic";
-		createObjectAndJob("ATPIPGen"+name,"700");
-		waitForJobsToFinish("ATPIPGen"+name,  500);
-		Object object = fetchObjectFromDB("ATPIPGen"+name);
+		ath.createObjectAndJob("ATPIPGen"+name,"700");
+		ath.waitForJobsToFinish("ATPIPGen"+name);
+		Object object = ath.fetchObjectFromDB("ATPIPGen"+name);
 		
-		assertTrue(repositoryFacade.objectExists(object.getIdentifier(), "danrw"));
-		assertTrue(repositoryFacade.objectExists(object.getIdentifier(), "danrw-closed"));
+		assertTrue(repositoryFacade.objectExists(object.getIdentifier(), "collection-open"));
+		assertTrue(repositoryFacade.objectExists(object.getIdentifier(), "collection-closed"));
 		
 	}
 	
